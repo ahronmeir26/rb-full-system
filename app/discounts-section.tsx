@@ -232,7 +232,7 @@ export function DiscountsSection({
         </div>
       </div>
 
-      {!connection.connected && !collectionsLoading && <div className="discount-alert warning"><CircleAlert size={18} /><div><strong>Shopify connection required</strong><span>Add the Shopify store domain and Admin API access token to enable collections and synchronization.</span></div></div>}
+      {!connection.connected && !collectionsLoading && <div className="discount-alert warning"><CircleAlert size={18} /><div><strong>Shopify connection required</strong><span>Add the Shopify store domain, client ID, and client secret to enable collections and synchronization.</span></div></div>}
       {connection.connected && !connection.functionConfigured && <div className="discount-alert warning"><CircleAlert size={18} /><div><strong>Discount Function setup required</strong><span>The store is connected, but the deployed Appreciation Discount Function ID has not been configured.</span></div></div>}
       {connection.connected && connection.functionConfigured && <div className="discount-alert connected"><CheckCircle2 size={18} /><div><strong>Shopify Plus connected</strong><span>{connection.store} · Custom two-group discount logic is ready.</span></div></div>}
       {message && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Discounts updated</strong><span>{message}</span></div></div>}

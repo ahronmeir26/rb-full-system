@@ -3,6 +3,19 @@ import type { DiscountProgram } from "./types";
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2026-07";
 const CONFIG_NAMESPACE = "$app:appreciation-product-discounts";
 const CONFIG_KEY = "function-configuration";
+const TOKEN_EXPIRY_BUFFER_MS = 60_000;
+
+type ShopifyTokenCache = {
+  credentialKey: string;
+  accessToken: string;
+  expiresAt: number;
+};
+
+let tokenCache: ShopifyTokenCache | null = null;
+let tokenRequest: {
+  credentialKey: string;
+  promise: Promise<ShopifyTokenCache>;
+} | null = null;
 
 type ShopifyUserError = {
   field?: string[];
@@ -20,27 +33,85 @@ export type ShopifyCollection = {
   handle: string;
 };
 
-export function shopifyConnectionStatus() {
+function shopifyCredentials() {
   const store = (process.env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
+  const clientId = process.env.SHOPIFY_CLIENT_ID || "";
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || "";
+  return { store, clientId, clientSecret };
+}
+
+export function shopifyConnectionStatus() {
+  const { store, clientId, clientSecret } = shopifyCredentials();
   const functionId = process.env.SHOPIFY_DISCOUNT_FUNCTION_ID || "";
   return {
     store,
-    connected: Boolean(store && token),
+    connected: Boolean(store && clientId && clientSecret),
     functionConfigured: Boolean(functionId),
   };
 }
 
+async function requestShopifyAccessToken() {
+  const { store, clientId, clientSecret } = shopifyCredentials();
+  if (!store || !clientId || !clientSecret) {
+    throw new Error("Shopify is not connected. Add the store domain, client ID, and client secret.");
+  }
+
+  const credentialKey = `${store}\0${clientId}\0${clientSecret}`;
+  if (
+    tokenCache?.credentialKey === credentialKey &&
+    Date.now() < tokenCache.expiresAt - TOKEN_EXPIRY_BUFFER_MS
+  ) {
+    return tokenCache.accessToken;
+  }
+
+  if (tokenRequest?.credentialKey !== credentialKey) {
+    const promise = (async () => {
+      const response = await fetch(`https://${store}/admin/oauth/access_token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: clientId,
+          client_secret: clientSecret,
+        }),
+      });
+      const result = await response.json().catch(() => null) as {
+        access_token?: string;
+        expires_in?: number;
+        error?: string;
+        error_description?: string;
+      } | null;
+      if (!response.ok || !result?.access_token) {
+        const detail = result?.error_description || result?.error;
+        throw new Error(`Shopify authentication failed with HTTP ${response.status}${detail ? `: ${detail}` : "."}`);
+      }
+
+      const expiresIn = Number(result.expires_in);
+      const cache = {
+        credentialKey,
+        accessToken: result.access_token,
+        expiresAt: Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : 86_399_000),
+      };
+      tokenCache = cache;
+      return cache;
+    })().finally(() => {
+      if (tokenRequest?.credentialKey === credentialKey) tokenRequest = null;
+    });
+    tokenRequest = { credentialKey, promise };
+  }
+
+  return (await tokenRequest.promise).accessToken;
+}
+
 async function shopifyGraphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const { store, connected } = shopifyConnectionStatus();
-  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
-  if (!connected) throw new Error("Shopify is not connected. Add the store domain and Admin API access token.");
+  if (!connected) throw new Error("Shopify is not connected. Add the store domain, client ID, and client secret.");
 
   const response = await fetch(`https://${store}/admin/api/${API_VERSION}/graphql.json`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-shopify-access-token": token,
+      "x-shopify-access-token": await requestShopifyAccessToken(),
     },
     body: JSON.stringify({ query, variables }),
   });

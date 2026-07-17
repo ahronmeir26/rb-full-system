@@ -92,6 +92,43 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm test`: build the starter and verify its rendered loading skeleton
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
+## Shopify setup
+
+This project uses a new Dev Dashboard app and Shopify's client credentials
+grant. It does not use a permanent Admin API access token.
+
+1. Create the app and target development store in the same organization in the
+   Shopify Dev Dashboard.
+2. Add the required `read_products` and `write_discounts` access scopes. For a
+   broad development/test installation that can exercise the planned order and
+   fulfillment workflow, use:
+
+   ```text
+   read_products,write_products,read_discounts,write_discounts,
+   read_orders,write_orders,read_draft_orders,write_draft_orders,
+   read_order_edits,write_order_edits,read_customers,write_customers,
+   read_inventory,write_inventory,read_locations,read_shipping,
+   read_returns,write_returns,read_merchant_managed_fulfillment_orders,
+   write_merchant_managed_fulfillment_orders
+   ```
+
+   The order and customer scopes involve protected customer data. Configure
+   the app's protected-customer-data access in Shopify before testing those
+   APIs. Add `read_all_orders` only if tests must read orders older than 60
+   days; Shopify requires separate approval for that scope.
+3. Release the app version, install it on the store, and approve its scopes.
+4. Set `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, and
+   `SHOPIFY_CLIENT_SECRET` in the server environment. Tokens are requested
+   programmatically, cached, and refreshed before their 24-hour expiry.
+5. Link the local Shopify Function to the app with
+   `shopify app config link --client-id <client-id>`, then deploy it with
+   `shopify app deploy`. Set the deployed Function ID as
+   `SHOPIFY_DISCOUNT_FUNCTION_ID`.
+
+The client credentials grant only works when the app and store belong to the
+same Shopify organization. Never expose `SHOPIFY_CLIENT_SECRET` to browser
+code or commit it to source control.
+
 ## Learn More
 
 - [vinext Documentation](https://github.com/cloudflare/vinext)
