@@ -2,8 +2,8 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 
 const INSTRUCTION_Y_FROM_TOP = 444.2;
 const FORM_CODE_ROWS = [
-  { pageIndex: 1, x: 147, yFromTop: 236.8 },
-  { pageIndex: 2, x: 151, yFromTop: 229.3 },
+  { pageIndex: 1, x: 147, yFromTop: 232.8 },
+  { pageIndex: 2, x: 151, yFromTop: 225.3 },
 ] as const;
 
 function cleanCouponCode(value: string) {

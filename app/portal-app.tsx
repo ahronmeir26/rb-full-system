@@ -12,11 +12,8 @@ import {
   Clock3,
   Download,
   FileText,
-  Inbox,
-  LayoutDashboard,
   LogOut,
   Mail,
-  Menu,
   MessageCircle,
   Search,
   Send,
@@ -28,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PREVIEW_COUPON_CODE } from "@/lib/appreciation-order-form-config";
 import type { School, SchoolStatus as Status } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 
@@ -36,7 +34,7 @@ const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-"
 function Logo() {
   return (
     <div className="brand" aria-label="Appreciation Initiative by A.I.STONE">
-      <Image className="brand-wordmark" src="/wordmark.png" alt="A.I.STONE" width={184} height={52} priority />
+      <Image className="brand-wordmark" src="/wordmark.png" alt="A.I.STONE" width={184} height={52} priority unoptimized />
       <span className="brand-product">Appreciation Initiative</span>
     </div>
   );
@@ -59,12 +57,13 @@ function Avatar({ school, small = false }: { school: School; small?: boolean }) 
   return <span className={`school-avatar ${school.color} ${small ? "small" : ""}`}>{school.initials}</span>;
 }
 
-function OrderFormDownload({ school, className = "secondary-button" }: { school: School; className?: string }) {
+function OrderFormDownload({ school, className = "secondary-button", preview = false }: { school: School; className?: string; preview?: boolean }) {
   if (!school.code.trim()) {
     return <button className={className} disabled title="Assign a 2026 coupon code before generating the form"><Download size={16} /> Coupon code required</button>;
   }
 
-  return <a className={`${className} download-link`} href={`/api/forms/appreciation-order?schoolId=${school.id}`} download><Download size={16} /> Download order form</a>;
+  const previewParameter = preview ? "&preview=1" : "";
+  return <a className={`${className} download-link`} href={`/api/forms/appreciation-order?schoolId=${school.id}${previewParameter}`} download><Download size={16} /> Download order form</a>;
 }
 
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
@@ -192,13 +191,13 @@ function SettingsModal({ email, onClose }: { email: string; onClose: () => void 
 }
 
 
-function SchoolPortal({ school, onExit, onSettings, exitLabel = "Return to program admin" }: { school: School; onExit: () => void; onSettings: () => void; exitLabel?: string }) {
+function SchoolPortal({ school, onExit, onSettings, exitLabel = "Return to program admin", preview = false }: { school: School; onExit: () => void; onSettings: () => void; exitLabel?: string; preview?: boolean }) {
   const firstName = school.admin?.split(" ")[0] || "Administrator";
   return <div className="portal-shell">
     <header className="portal-header"><Logo /><div className="portal-header-actions"><button className="portal-settings" onClick={onSettings}><Settings size={16} /> Settings</button><div className="portal-school"><Avatar school={school} small /><div><strong>{school.name}</strong><span>Administrator portal</span></div><ChevronDown size={16} /></div></div></header>
     <main className="portal-content">
       <button className="back-link" onClick={onExit}>{exitLabel === "Sign out" ? <LogOut size={16} /> : <ArrowLeft size={16} />} {exitLabel}</button>
-      <section className="portal-welcome"><div><span className="portal-kicker"><ShieldCheck size={15} /> Appreciation Initiative · 2026</span><h1>Welcome, {firstName}</h1><p>Your school’s recorded program information appears here.</p></div><div className="eligibility-card"><CircleHelp size={26} /><div><strong>{school.eligibility || "Eligibility not recorded"}</strong><span>2026 code: {school.code || "Not assigned"}</span></div></div></section>
+      <section className="portal-welcome"><div><span className="portal-kicker"><ShieldCheck size={15} /> Appreciation Initiative · 2026</span><h1>Welcome, {firstName}</h1><p>Your school’s recorded program information appears here.</p></div><div className="eligibility-card"><CircleHelp size={26} /><div><strong>{school.eligibility || "Eligibility not recorded"}</strong><span>{preview ? "Preview coupon code" : "2026 code"}: {school.code || "Not assigned"}</span></div></div></section>
       <section className="portal-steps"><div className="section-heading"><div><p className="eyebrow">Your checklist</p><h2>Program steps</h2></div><span>0 of 4 recorded</span></div><div className="portal-step-grid">
         <article className="portal-step"><span className="step-number">1</span><div><p>Step 1</p><h3>Confirm eligibility</h3><span>No activity recorded</span></div></article>
         <article className="portal-step current"><span className="step-number">2</span><div><p>Step 2</p><h3>Download materials</h3><span>{school.code ? "Customized form ready" : "Waiting for a 2026 code"}</span></div></article>
@@ -206,7 +205,7 @@ function SchoolPortal({ school, onExit, onSettings, exitLabel = "Return to progr
         <article className="portal-step"><span className="step-number">4</span><div><p>Step 4</p><h3>Submit order forms</h3><span>Uploads not configured</span></div></article>
       </div></section>
       <div className="portal-lower">
-        <section className="panel resource-panel"><div className="panel-heading"><div><p className="eyebrow">School resources</p><h2>Forms ready to use</h2></div></div><div className="document-list"><div className="document-row"><span className="file-icon pdf"><FileText size={19} /></span><div><strong>A.I. Stone Appreciation Initiative order form</strong><p>{school.code ? `Generated with coupon code ${school.code} in the form and ordering instructions.` : "A 2026 coupon code must be assigned before this form can be generated."}</p></div><span className="doc-label">PDF · 4 pages</span><OrderFormDownload school={school} /></div></div></section>
+        <section className="panel resource-panel"><div className="panel-heading"><div><p className="eyebrow">School resources</p><h2>Forms ready to use</h2></div></div><div className="document-list"><div className="document-row"><span className="file-icon pdf"><FileText size={19} /></span><div><strong>A.I. Stone Appreciation Initiative order form</strong><p>{school.code ? `Generated with ${preview ? "preview " : ""}coupon code ${school.code} in the form and ordering instructions.` : "A 2026 coupon code must be assigned before this form can be generated."}</p></div><span className="doc-label">PDF · 4 pages</span><OrderFormDownload school={school} preview={preview} /></div></div></section>
         <aside className="panel help-card"><span><CircleHelp size={22} /></span><h2>Need a hand?</h2><p>Contact the program team when support details are configured.</p><button disabled><Mail size={16} /> Contact program team</button></aside>
       </div>
     </main>
@@ -223,7 +222,6 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
   const [sent, setSent] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Status | "All">("All");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -256,27 +254,23 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
     window.location.reload();
   }
 
-  if (portalSchool) return <><SchoolPortal school={portalSchool} onExit={viewer.role === "school_admin" ? signOut : () => setPortalSchool(null)} onSettings={() => setSettingsOpen(true)} exitLabel={viewer.role === "school_admin" ? "Sign out" : "Return to program admin"} />{settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}</>;
+  if (portalSchool) return <><SchoolPortal school={portalSchool} onExit={viewer.role === "school_admin" ? signOut : () => setPortalSchool(null)} onSettings={() => setSettingsOpen(true)} exitLabel={viewer.role === "school_admin" ? "Sign out" : "Return to program admin"} preview={viewer.role === "program_admin"} />{settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}</>;
 
   return <div className="app-shell">
-    {sidebarOpen && <button className="sidebar-scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
-    <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-      <Logo />
-      <nav className="primary-nav" aria-label="Main navigation">
-        <button className={!selected ? "active" : ""} onClick={() => { setSelected(null); setSidebarOpen(false); }}><LayoutDashboard size={18} /> Overview</button>
-        <button className={selected ? "active" : ""} onClick={() => setSidebarOpen(false)}><Building2 size={18} /> Schools <span>{schools.length}</span></button>
-        <button><Inbox size={18} /> Forms & orders</button>
-        <button><Mail size={18} /> Correspondence</button>
-      </nav>
-      <div className="nav-label">Workspace</div>
-      <nav className="primary-nav lower"><button><UsersRound size={18} /> Administrators</button><button onClick={() => setSettingsOpen(true)}><Settings size={18} /> Settings</button></nav>
-      <div className="sidebar-spacer" />
-      <button className="demo-portal" onClick={() => schools[0] && setPortalSchool(schools[0])}><span><UserRound size={17} /></span><div><strong>Preview school portal</strong><small>{schools[0]?.name ?? "No school selected"}</small></div><ChevronRight size={16} /></button>
-      <div className="user-card"><span className="user-avatar">{viewer.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span><div><strong>{viewer.displayName}</strong><span>Managing admin</span></div><button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut size={17} /></button></div>
-    </aside>
-
     <div className="main-shell">
-      <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></div><div className="topbar-actions"><button className="help-button" onClick={signOut}><LogOut size={17} /> Sign out</button></div></header>
+      <header className="topbar">
+        <Logo />
+        <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
+        <div className="topbar-actions">
+          <button className="topbar-control" onClick={() => schools[0] && setPortalSchool({ ...schools[0], code: PREVIEW_COUPON_CODE })} disabled={!schools[0]}><UserRound size={16} /><span>Preview portal</span></button>
+          <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
+          <div className="topbar-account">
+            <span className="user-avatar">{viewer.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
+            <div className="topbar-account-copy"><strong>{viewer.displayName}</strong><span>Managing admin</span></div>
+            <button className="icon-button" onClick={signOut} aria-label="Sign out" title="Sign out"><LogOut size={17} /></button>
+          </div>
+        </div>
+      </header>
 
       {selected ? <SchoolDetail school={selected} onBack={() => setSelected(null)} onEmail={() => setEmailSchool(selected)} /> : <main className="content">
         <div className="page-heading"><div><p className="eyebrow">Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Here’s what’s recorded across your school network.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Invite every school</button></div></div>

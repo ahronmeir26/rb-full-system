@@ -1,5 +1,6 @@
 import orderFormTemplate from "../../../../assets/forms/ai-stone-appreciation-order-form-template.pdf?inline";
 import { customizeAppreciationOrderForm } from "@/lib/appreciation-order-form";
+import { PREVIEW_COUPON_CODE } from "@/lib/appreciation-order-form-config";
 import { getViewer } from "@/lib/auth";
 import { loadSchools } from "@/lib/school-data";
 
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const requestedSchoolId = Number(url.searchParams.get("schoolId"));
+  const isManagingAdminPreview = viewer.role === "program_admin" && url.searchParams.get("preview") === "1";
   const schoolId = viewer.role === "school_admin" ? viewer.schoolId : requestedSchoolId;
   if (!schoolId || !Number.isInteger(schoolId) || schoolId < 1) {
     return Response.json({ error: "A valid school is required." }, { status: 400 });
@@ -32,14 +34,15 @@ export async function GET(request: Request) {
   const { schools } = await loadSchools(schoolId);
   const school = schools.find((item) => item.id === schoolId);
   if (!school) return Response.json({ error: "School not found." }, { status: 404 });
-  if (!school.code.trim()) {
+  const couponCode = isManagingAdminPreview ? PREVIEW_COUPON_CODE : school.code.trim();
+  if (!couponCode) {
     return Response.json({ error: "This school does not have a 2026 coupon code yet." }, { status: 409 });
   }
 
   try {
     const customized = await customizeAppreciationOrderForm(
       decodeTemplate(orderFormTemplate),
-      school.code,
+      couponCode,
     );
     const filename = `ai-stone-order-form-${safeFilenamePart(school.name)}.pdf`;
     return new Response(customized as BodyInit, {

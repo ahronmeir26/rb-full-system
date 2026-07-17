@@ -88,7 +88,7 @@ export function LoginForm() {
   return (
     <main className="login-shell">
       <section className="login-card">
-        <div className="login-brand"><Image src="/wordmark.png" alt="A.I.STONE" width={210} height={60} priority /><span>Appreciation Initiative</span></div>
+        <div className="login-brand"><Image src="/wordmark.png" alt="A.I.STONE" width={210} height={60} priority unoptimized /><span>Appreciation Initiative</span></div>
         <div className="login-icon">{mode === "signin" ? <LockKeyhole size={23} /> : codeSent ? <MailCheck size={23} /> : <KeyRound size={23} />}</div>
         <p className="eyebrow">Secure portal</p>
         <h1>{heading}</h1>

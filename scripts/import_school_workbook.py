@@ -116,7 +116,7 @@ def main():
             "district": "",
             "city": city,
             "state": state,
-            "code": "",
+            "code": code25,
             "code2025": code25,
             "code2024": code24,
             "admin": match.get("admin", ""),
