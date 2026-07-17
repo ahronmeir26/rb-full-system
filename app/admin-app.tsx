@@ -14,6 +14,7 @@ import {
   Mail,
   MessageCircle,
   Pencil,
+  Plus,
   Search,
   Send,
   Settings,
@@ -24,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscountProgram, OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 import { initial2026SchoolCode } from "@/lib/school-code";
+import { outreachStatusTone } from "@/lib/outreach-status";
 import { DiscountsSection } from "./discounts-section";
 
 const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-");
@@ -54,6 +56,10 @@ function Avatar({ school, small = false }: { school: School; small?: boolean }) 
   return <span className={`school-avatar ${school.color} ${small ? "small" : ""}`}>{school.initials}</span>;
 }
 
+function OutreachPill({ status }: { status: string }) {
+  return <span className="outreach-pill" data-tone={outreachStatusTone(status)}>{status}</span>;
+}
+
 function OrderFormDownload({ school, className = "secondary-button" }: { school: School; className?: string }) {
   if (!school.code.trim()) {
     return <button className={className} disabled title="Assign a 2026 coupon code before generating the form"><Download size={16} /> Coupon code required</button>;
@@ -73,6 +79,88 @@ type CorrespondenceRecord = {
   status: string;
   contacted_at: string;
 };
+
+type NewSchoolFields = {
+  name: string;
+  schoolType: "regular" | "chassidish";
+  district: string;
+  city: string;
+  state: string;
+  outreachStatus: string;
+  code: string;
+  admin: string;
+  email: string;
+  phone: string;
+  students: string;
+};
+
+function CreateSchoolModal({ statuses, onClose, onCreated }: {
+  statuses: OutreachStatus[];
+  onClose: () => void;
+  onCreated: (school: School) => void;
+}) {
+  const [fields, setFields] = useState<NewSchoolFields>({
+    name: "",
+    schoolType: "regular",
+    district: "",
+    city: "",
+    state: "",
+    outreachStatus: statuses.find((status) => status.name === "Not contacted")?.name || statuses[0]?.name || "",
+    code: "",
+    admin: "",
+    email: "",
+    phone: "",
+    students: "",
+  });
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function update<K extends keyof NewSchoolFields>(field: K, value: NewSchoolFields[K]) {
+    setFields((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    const response = await fetch("/api/schools", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) {
+      setMessage(result?.error || "Unable to add the school.");
+      return;
+    }
+    onCreated(result.school);
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="modal create-school-modal" role="dialog" aria-modal="true" aria-labelledby="create-school-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><p className="eyebrow">School directory</p><h2 id="create-school-title">Add a school</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
+      <form className="school-create-form" onSubmit={submit}>
+        <div className="school-create-grid">
+          <label className="school-create-wide"><span>School name</span><input autoFocus required maxLength={160} value={fields.name} onChange={(event) => update("name", event.target.value)} placeholder="School name" /></label>
+          <label><span>School type</span><select value={fields.schoolType} onChange={(event) => update("schoolType", event.target.value as NewSchoolFields["schoolType"])}><option value="regular">Regular</option><option value="chassidish">Chassidish</option></select></label>
+          <label><span>Outreach status</span><select required value={fields.outreachStatus} onChange={(event) => update("outreachStatus", event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select></label>
+          <label className="school-create-wide"><span>District</span><input maxLength={120} value={fields.district} onChange={(event) => update("district", event.target.value)} placeholder="District or network" /></label>
+          <label><span>City</span><input maxLength={120} value={fields.city} onChange={(event) => update("city", event.target.value)} placeholder="City" /></label>
+          <label><span>State</span><input maxLength={64} value={fields.state} onChange={(event) => update("state", event.target.value)} placeholder="State" /></label>
+          <label><span>Administrator</span><input maxLength={160} value={fields.admin} onChange={(event) => update("admin", event.target.value)} placeholder="Contact name" /></label>
+          <label><span>Administrator email</span><input type="email" maxLength={254} value={fields.email} onChange={(event) => update("email", event.target.value)} placeholder="name@school.org" /></label>
+          <label><span>Phone</span><input type="tel" maxLength={64} value={fields.phone} onChange={(event) => update("phone", event.target.value)} placeholder="Phone number" /></label>
+          <label><span>Students</span><input type="number" min={0} max={1000000} step={1} value={fields.students} onChange={(event) => update("students", event.target.value)} placeholder="0" /></label>
+          <label className="school-create-wide"><span>2026 coupon code</span><input className="code-input" maxLength={64} value={fields.code} onChange={(event) => update("code", event.target.value)} placeholder="Optional" /></label>
+        </div>
+        <small>You can leave optional details blank and complete them later.</small>
+        {message && <div className="login-error" role="alert">{message}</div>}
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading || !fields.name.trim() || !fields.outreachStatus}>{loading ? "Adding…" : "Add school"}</button></div>
+      </form>
+    </div>
+  </div>;
+}
 
 function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }: {
   school: School;
@@ -208,7 +296,7 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit }
           <section className="panel school-summary-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">School details</p><h2>At a glance</h2></div>
             <div className="school-data-grid">
-              <div className="school-data-item"><span>Outreach status</span><strong><span className="outreach-pill">{school.outreachStatus}</span></strong></div>
+              <div className="school-data-item"><span>Outreach status</span><strong><OutreachPill status={school.outreachStatus} /></strong></div>
               <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? new Date(school.lastContactedAt).toLocaleDateString() : "No contact recorded"}</strong></div>
               <div className="school-data-item school-data-wide"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
               <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
@@ -306,6 +394,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [schools, setSchools] = useState(initialSchools);
   const [outreachStatuses, setOutreachStatuses] = useState(initialOutreachStatuses);
   const [selected, setSelected] = useState<School | null>(null);
+  const [createSchoolOpen, setCreateSchoolOpen] = useState(false);
   const [editSchool, setEditSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -394,6 +483,14 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     setEditSchool(null);
   }
 
+  function schoolCreated(school: School) {
+    setSchools((current) => [...current, school].sort((left, right) => left.name.localeCompare(right.name)));
+    setCreateSchoolOpen(false);
+    setSearch("");
+    setFilter("All");
+    openSchool(school);
+  }
+
   function openSchool(school: School) {
     const url = new URL(window.location.href);
     url.searchParams.set("school", String(school.id));
@@ -457,12 +554,13 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
 
         <section ref={schoolsSectionRef} className="schools-section">
-          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Communication:</span><select value={filter} onChange={(e) => { setFilter(e.target.value); setVisibleCount(30); }}><option>All</option>{outreachStatuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className="outreach-pill">{school.outreachStatus}</span></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or communication status.</p></div>}</div>
+          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Communication:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by communication status" value={filter} onChange={(e) => { setFilter(e.target.value); setVisibleCount(30); }}><option>All</option>{outreachStatuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><ChevronDown size={14} /></label></div></div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><OutreachPill status={school.outreachStatus} /></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or communication status.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
     </div>
+    {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}
     {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(code, outreachStatus) => saveSchool(editSchool, code, outreachStatus)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}

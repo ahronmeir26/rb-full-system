@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PDFDocument } from "pdf-lib";
 import { customizeAppreciationOrderForm } from "../lib/appreciation-order-form.ts";
+import { mapSchool } from "../lib/map-school.ts";
+import { outreachStatusTone } from "../lib/outreach-status.ts";
 import { initial2026SchoolCode } from "../lib/school-code.ts";
 import { cartLinesDiscountsGenerateRun } from "../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.js";
 
@@ -150,6 +152,44 @@ test("2026 coupon codes start blank and remain admin-editable", async () => {
   assert.match(updateRoute, /\.update\(updates\)/);
 });
 
+test("admins can add a school and initialize its program records", async () => {
+  const [editor, createRoute] = await Promise.all([
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/schools/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(editor, /> Add school</);
+  assert.match(editor, /fetch\("\/api\/schools"/);
+  assert.match(editor, /setSchools\(\(current\) => \[\.\.\.current, school\]/);
+  assert.match(createRoute, /\.from\("schools"\)\s*\.insert\(/);
+  assert.match(createRoute, /\.from\("school_programs"\)\.insert\(/);
+  assert.match(createRoute, /\.from\("school_year_stats"\)\.insert\(/);
+  assert.match(createRoute, /\.from\("school_contacts"\)\.insert\(/);
+  assert.match(createRoute, /status: 201/);
+});
+
+test("new Supabase schools map missing optional fields to empty values", () => {
+  const school = mapSchool({
+    id: 900,
+    name: "Verification Academy",
+    school_type: "chassidish",
+    district: null,
+    city: null,
+    state: null,
+    code: null,
+    admin: null,
+    email: null,
+    phone: null,
+  });
+
+  assert.equal(school.schoolType, "chassidish");
+  assert.equal(school.outreachStatus, "Not contacted");
+  assert.equal(school.city, "");
+  assert.equal(school.email, "");
+  assert.equal(school.initials, "VA");
+  assert.equal(school.status, "Not started");
+});
+
 test("supports custom outreach statuses and complete contact history", async () => {
   const [schema, editor, correspondenceRoute, statusRoute] = await Promise.all([
     readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
@@ -181,12 +221,28 @@ test("keeps pre-engagement outreach separate and hides program status from the s
   assert.doesNotMatch(editor, /<th>Program status<\/th>/);
 });
 
+test("assigns semantic colors to built-in and custom outreach statuses", () => {
+  assert.equal(outreachStatusTone("Not contacted"), "neutral");
+  assert.equal(outreachStatusTone("Sent invite"), "info");
+  assert.equal(outreachStatusTone("Not interested"), "negative");
+  assert.equal(outreachStatusTone("Interested"), "positive");
+  assert.equal(outreachStatusTone("Sent"), "complete");
+  assert.equal(outreachStatusTone("Follow up next week"), "attention");
+  assert.equal(outreachStatusTone("On hold"), "custom");
+});
+
 test("filters the school list by communication status", async () => {
-  const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
+  const [editor, styles] = await Promise.all([
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
   assert.match(editor, /school\.outreachStatus === filter/);
   assert.match(editor, /<span>Communication:<\/span>/);
+  assert.match(editor, /className="filter-select-value">\{filter\}<\/span>/);
+  assert.match(editor, /aria-label="Filter by communication status"/);
   assert.match(editor, /outreachStatuses\.map\(\(status\) => <option/);
   assert.doesNotMatch(editor, /school\.status === filter/);
+  assert.match(styles, /\.filter-select select \{ position: absolute; inset: 0; width: 100%; height: 100%;/);
 });
 
 test("school details participate in browser back and forward navigation", async () => {
