@@ -23,6 +23,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscountProgram, OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
+import { initial2026SchoolCode } from "@/lib/school-code";
 import { DiscountsSection } from "./discounts-section";
 
 const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-");
@@ -80,7 +81,7 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
   onSaved: (code: string, outreachStatus: string) => void;
   onStatusCreated: (status: OutreachStatus) => void;
 }) {
-  const [code, setCode] = useState(school.code);
+  const [code, setCode] = useState(() => initial2026SchoolCode(school));
   const [outreachStatus, setOutreachStatus] = useState(school.outreachStatus);
   const [newStatus, setNewStatus] = useState("");
   const [message, setMessage] = useState("");

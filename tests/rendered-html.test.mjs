@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PDFDocument } from "pdf-lib";
 import { customizeAppreciationOrderForm } from "../lib/appreciation-order-form.ts";
+import { initial2026SchoolCode } from "../lib/school-code.ts";
 import { cartLinesDiscountsGenerateRun } from "../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.js";
 
 async function render() {
@@ -187,6 +188,13 @@ test("school details participate in browser back and forward navigation", async 
   assert.match(editor, /history\.back\(\)/);
   assert.match(editor, /searchParams\.set\("school"/);
   assert.match(editor, /returningSchoolIdRef/);
+});
+
+test("prefills an unsaved 2026 school code from a 2025 code ending in 25", () => {
+  assert.equal(initial2026SchoolCode({ code: "", code2025: "YESHIVA25" }), "YESHIVA26");
+  assert.equal(initial2026SchoolCode({ code: "", code2025: "YESHIVA250" }), "");
+  assert.equal(initial2026SchoolCode({ code: "", code2025: "YESHIVA24" }), "");
+  assert.equal(initial2026SchoolCode({ code: "CUSTOM26", code2025: "YESHIVA25" }), "CUSTOM26");
 });
 
 test("overview omits the bulk and shortcut email buttons", async () => {
