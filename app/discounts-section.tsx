@@ -11,7 +11,7 @@ import {
   Shirt,
   ShoppingBag,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscountProgram, DiscountValueType } from "@/lib/types";
 
 type ShopifyCollection = {
@@ -67,9 +67,18 @@ function ProductGroupCard({
   onType: (type: DiscountValueType) => void;
   onValue: (value: number) => void;
 }) {
+  const [discountInputValue, setDiscountInputValue] = useState(String(discountValue));
+  const discountInputFocused = useRef(false);
   const options = collectionId && !collections.some((collection) => collection.id === collectionId)
     ? [{ id: collectionId, title: collectionTitle || "Current Shopify collection", handle: "" }, ...collections]
     : collections;
+
+  useEffect(() => {
+    if (!discountInputFocused.current) {
+      setDiscountInputValue(String(discountValue));
+    }
+  }, [discountValue]);
+
   return (
     <article className="discount-group-card">
       <div className="discount-group-icon"><Shirt size={20} /></div>
@@ -109,8 +118,19 @@ function ProductGroupCard({
               min="0"
               max={discountType === "percentage" ? "100" : undefined}
               step="0.01"
-              value={discountValue}
-              onChange={(event) => onValue(Number(event.target.value))}
+              value={discountInputValue}
+              onFocus={() => {
+                discountInputFocused.current = true;
+              }}
+              onBlur={() => {
+                discountInputFocused.current = false;
+                setDiscountInputValue(String(discountValue));
+              }}
+              onChange={(event) => {
+                const inputValue = event.target.value;
+                setDiscountInputValue(inputValue);
+                onValue(inputValue === "" ? 0 : Number(inputValue));
+              }}
             />
           </div>
         </label>
