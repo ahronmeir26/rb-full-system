@@ -5,9 +5,10 @@ export type Viewer = {
   id: string;
   email: string;
   displayName: string;
-  role: "program_admin" | "school_admin";
-  schoolId?: number;
+  role: "admin";
 };
+
+export const ADMIN_ROLES = ["admin", "program_admin"] as const;
 
 function serviceClient() {
   const url = process.env.SUPABASE_URL;
@@ -29,25 +30,12 @@ export async function getViewer(): Promise<Viewer | null> {
     .select("display_name,role")
     .eq("id", userData.user.id)
     .single();
-  if (profileError || !profile || !["program_admin", "school_admin"].includes(profile.role)) return null;
-
-  let schoolId;
-  if (profile.role === "school_admin") {
-    const { data: contact } = await supabase
-      .from("school_contacts")
-      .select("school_id")
-      .eq("user_id", userData.user.id)
-      .limit(1)
-      .maybeSingle();
-    if (!contact) return null;
-    schoolId = Number(contact.school_id);
-  }
+  if (profileError || !profile || !ADMIN_ROLES.includes(profile.role)) return null;
 
   return {
     id: userData.user.id,
     email: userData.user.email,
     displayName: profile.display_name || userData.user.email,
-    role: profile.role,
-    schoolId,
+    role: "admin",
   };
 }

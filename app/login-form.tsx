@@ -80,17 +80,17 @@ export function LoginForm() {
 
   const heading = mode === "signin" ? "Sign in" : mode === "access" ? "Create your password" : "Reset your password";
   const description = mode === "signin"
-    ? "Use your managing administrator or school administrator account."
+    ? "Use your Admin account."
     : codeSent
       ? `Enter the verification code sent to ${email}.`
-      : "Enter an administrator email already listed in the system.";
+      : "Enter the email for an existing Admin account.";
 
   return (
     <main className="login-shell">
       <section className="login-card">
         <div className="login-brand"><Image src="/wordmark.png" alt="A.I.STONE" width={210} height={60} priority unoptimized /><span>Appreciation Initiative</span></div>
         <div className="login-icon">{mode === "signin" ? <LockKeyhole size={23} /> : codeSent ? <MailCheck size={23} /> : <KeyRound size={23} />}</div>
-        <p className="eyebrow">Secure portal</p>
+        <p className="eyebrow">Admin portal</p>
         <h1>{heading}</h1>
         <p>{description}</p>
 
@@ -102,7 +102,7 @@ export function LoginForm() {
         </form>}
 
         {mode !== "signin" && !codeSent && <form onSubmit={requestCode}>
-          <label>Administrator email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+          <label>Admin email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
           {error && <div className="login-error" role="alert">{error}</div>}
           <button className="primary-button" disabled={loading}>{loading ? <><LoaderCircle className="spin" size={16} /> Requesting…</> : "Send verification code"}</button>
         </form>}

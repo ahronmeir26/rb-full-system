@@ -1,1 +1,0 @@
-export const PREVIEW_COUPON_CODE = "PREVIEW26";

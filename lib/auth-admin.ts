@@ -18,49 +18,17 @@ export async function findAuthUser(supabase: SupabaseClient, email: string): Pro
   return null;
 }
 
-export async function ensureSchoolAdminAccount(emailInput: string): Promise<User | null> {
+export async function findAdminAccount(emailInput: string): Promise<User | null> {
   const email = emailInput.trim().toLowerCase();
   const supabase = getServiceClient();
-  let user = await findAuthUser(supabase, email);
-  if (user) {
-    const { data: existingProfile, error: profileLookupError } = await supabase
-      .from("user_profiles")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profileLookupError) throw profileLookupError;
-    if (existingProfile) return user;
-  }
+  const user = await findAuthUser(supabase, email);
+  if (!user) return null;
 
-  const { data: contacts, error: contactError } = await supabase
-    .from("school_contacts")
-    .select("name,school_id")
-    .eq("email", email);
-  if (contactError) throw contactError;
-  if (!contacts?.length) return null;
-
-  const displayName = contacts.find((contact) => contact.name)?.name || "School Administrator";
-  if (!user) {
-    const { data, error } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: false,
-      user_metadata: { display_name: displayName, role: "school_admin" },
-    });
-    if (error) throw error;
-    user = data.user;
-  }
-
-  const { error: profileError } = await supabase.from("user_profiles").upsert({
-    id: user.id,
-    display_name: displayName,
-    role: "school_admin",
-  });
-  if (profileError) throw profileError;
-
-  const { error: linkError } = await supabase
-    .from("school_contacts")
-    .update({ user_id: user.id })
-    .eq("email", email);
-  if (linkError) throw linkError;
-  return user;
+  const { data: profile, error } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return profile && ["admin", "program_admin"].includes(profile.role) ? user : null;
 }

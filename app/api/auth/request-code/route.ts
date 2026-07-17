@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { ensureSchoolAdminAccount } from "@/lib/auth-admin";
+import { findAdminAccount } from "@/lib/auth-admin";
 
 export async function POST(request: Request) {
   const { email } = await request.json();
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.trim().toLowerCase();
   try {
-    const user = await ensureSchoolAdminAccount(normalizedEmail);
+    const user = await findAdminAccount(normalizedEmail);
     if (!user) return NextResponse.json({ ok: true });
 
     const url = process.env.SUPABASE_URL!;

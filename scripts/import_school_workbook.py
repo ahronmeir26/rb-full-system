@@ -113,6 +113,7 @@ def main():
         schools.append({
             "id": school_id,
             "name": name,
+            "schoolType": "regular",
             "district": "",
             "city": city,
             "state": state,

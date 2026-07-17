@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import seedSchools from "@/app/school-data.generated.json";
-import type { School, SchoolStatus } from "./types";
+import type { School, SchoolStatus, SchoolType } from "./types";
 
 type SchoolRow = Partial<School> & Record<string, unknown>;
 
 const statuses = new Set<SchoolStatus>(["Ready to order", "In progress", "Needs attention", "Not started"]);
+const schoolTypes = new Set<SchoolType>(["regular", "chassidish"]);
 
 function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -13,9 +14,11 @@ function asNumber(value: unknown, fallback = 0) {
 function mapSchool(row: SchoolRow, index: number): School {
   const fallback = seedSchools[index % seedSchools.length] as School;
   const rawStatus = String(row.status ?? fallback.status) as SchoolStatus;
+  const rawSchoolType = String(row.schoolType ?? row.school_type ?? fallback.schoolType ?? "regular") as SchoolType;
   return {
     id: asNumber(row.id, index + 1),
     name: String(row.name ?? fallback.name),
+    schoolType: schoolTypes.has(rawSchoolType) ? rawSchoolType : "regular",
     district: String(row.district ?? fallback.district),
     city: String(row.city ?? fallback.city),
     state: String(row.state ?? fallback.state),
@@ -41,7 +44,7 @@ function mapSchool(row: SchoolRow, index: number): School {
 export async function loadSchools(schoolId?: number): Promise<{ schools: School[]; source: "supabase" | "workbook" }> {
   const url = process.env.SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY;
-  const fallback = seedSchools as unknown as School[];
+  const fallback = (seedSchools as unknown as SchoolRow[]).map(mapSchool);
 
   const fallbackSchools = schoolId ? fallback.filter((school) => school.id === schoolId) : fallback;
   if (!url || !secret) return { schools: fallbackSchools, source: "workbook" };

@@ -11,6 +11,7 @@ const supabase = createClient(url, secret, { auth: { persistSession: false, auto
 const rows = schools.map((school) => ({
   id: school.id,
   name: school.name,
+  school_type: school.schoolType || "regular",
   district: school.district || null,
   city: school.city || null,
   state: school.state || null,

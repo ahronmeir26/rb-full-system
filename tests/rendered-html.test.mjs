@@ -31,9 +31,9 @@ test("server-renders the Appreciation Initiative application", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Appreciation Initiative — Program Operations<\/title>/i);
+  assert.match(html, /<title>Appreciation Initiative — Admin<\/title>/i);
   assert.match(html, /Appreciation Initiative/);
-  assert.match(html, /Secure portal/);
+  assert.match(html, /Admin portal/);
   assert.match(html, /Sign in/);
 });
 
@@ -61,7 +61,14 @@ test("database schema covers the complete school-program workflow", async () => 
 
   assert.match(schema, /enable row level security/);
   assert.match(schema, /shopify_order_id text/);
+  assert.match(schema, /school_type text not null default 'regular'/);
+  assert.match(schema, /check \(school_type in \('regular', 'chassidish'\)\)/);
+  assert.match(schema, /update public\.schools set school_type = 'regular' where school_type is null/);
+  assert.match(schema, /delete from public\.user_profiles where role = 'school_admin'/);
+  assert.match(schema, /update public\.user_profiles set role = 'admin' where role = 'program_admin'/);
+  assert.match(schema, /check \(role = 'admin'\)/);
   assert.match(loader, /from\("schools"\)\.select\("\*"\)/);
+  assert.match(importer, /school_type: school\.schoolType \|\| "regular"/);
   assert.match(importer, /program_year: 2026/);
   assert.match(importer, /program_year: 2025/);
   assert.match(importer, /program_year: 2024/);

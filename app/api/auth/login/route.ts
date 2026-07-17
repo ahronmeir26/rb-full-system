@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     .select("role")
     .eq("id", data.user.id)
     .maybeSingle();
-  if (!profile) return NextResponse.json({ error: "This account does not have portal access." }, { status: 403 });
+  if (!profile || !["admin", "program_admin"].includes(profile.role)) {
+    return NextResponse.json({ error: "This account does not have Admin access." }, { status: 403 });
+  }
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set("appreciation-initiative-access-token", data.session.access_token, {

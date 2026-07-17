@@ -26,6 +26,15 @@ export async function POST(request: Request) {
   }
 
   const service = getServiceClient();
+  const { data: profile, error: profileError } = await service
+    .from("user_profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (profileError || !profile || !["admin", "program_admin"].includes(profile.role)) {
+    return NextResponse.json({ error: "This account does not have Admin access." }, { status: 403 });
+  }
+
   const { error: passwordError } = await service.auth.admin.updateUserById(data.user.id, {
     password,
     email_confirm: true,

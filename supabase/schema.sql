@@ -16,6 +16,8 @@ create table if not exists public.schools (
   district text,
   city text,
   state text,
+  school_type text not null default 'regular'
+    check (school_type in ('regular', 'chassidish')),
   code text,
   code_2025 text,
   code_2024 text,
@@ -44,15 +46,31 @@ create index if not exists schools_email_idx on public.schools (lower(email));
 alter table public.schools alter column district drop not null;
 alter table public.schools alter column district drop default;
 alter table public.schools alter column code drop not null;
+alter table public.schools add column if not exists school_type text;
+update public.schools set school_type = 'regular' where school_type is null;
+alter table public.schools alter column school_type set default 'regular';
+alter table public.schools alter column school_type set not null;
+alter table public.schools drop constraint if exists schools_school_type_check;
+alter table public.schools
+  add constraint schools_school_type_check
+  check (school_type in ('regular', 'chassidish'));
 
 create table if not exists public.user_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
-  role text not null default 'school_admin'
-    check (role in ('program_admin', 'school_admin')),
+  role text not null default 'admin'
+    check (role = 'admin'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_profiles alter column role set default 'admin';
+alter table public.user_profiles drop constraint if exists user_profiles_role_check;
+delete from public.user_profiles where role = 'school_admin';
+update public.user_profiles set role = 'admin' where role = 'program_admin';
+alter table public.user_profiles
+  add constraint user_profiles_role_check
+  check (role = 'admin');
 
 create table if not exists public.school_contacts (
   id uuid primary key default gen_random_uuid(),

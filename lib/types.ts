@@ -1,8 +1,10 @@
 export type SchoolStatus = "Ready to order" | "In progress" | "Needs attention" | "Not started";
+export type SchoolType = "regular" | "chassidish";
 
 export type School = {
   id: number;
   name: string;
+  schoolType: SchoolType;
   district: string;
   city: string;
   state: string;
