@@ -288,14 +288,6 @@ export function DiscountsSection({
         />
       </section>
 
-      <section className="discount-settings-panel combination-panel">
-        <div><p className="eyebrow">Combination rules</p><h2>Allow other discounts</h2><p>Choose which other Shopify discounts customers may use alongside the 2026 program code.</p></div>
-        <div className="combination-options">
-          <label className="checkbox-field"><input type="checkbox" checked={program.combinesWithProductDiscounts} onChange={(event) => update("combinesWithProductDiscounts", event.target.checked)} /><span><strong>Product discounts</strong><small>Other item-level offers</small></span></label>
-          <label className="checkbox-field"><input type="checkbox" checked={program.combinesWithOrderDiscounts} onChange={(event) => update("combinesWithOrderDiscounts", event.target.checked)} /><span><strong>Order discounts</strong><small>Cart-wide offers</small></span></label>
-          <label className="checkbox-field"><input type="checkbox" checked={program.combinesWithShippingDiscounts} onChange={(event) => update("combinesWithShippingDiscounts", event.target.checked)} /><span><strong>Shipping discounts</strong><small>Free or reduced delivery</small></span></label>
-        </div>
-      </section>
     </main>
   );
 }

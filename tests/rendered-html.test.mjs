@@ -95,6 +95,8 @@ test("stores and manages the shared 2026 Shopify discount program", async () => 
   assert.match(editor, /Pre-order men's shirts/);
   assert.match(editor, /Pre-order boys' shirts/);
   assert.match(editor, /Sync all 2026 codes/);
+  assert.doesNotMatch(editor, /Combination rules/);
+  assert.doesNotMatch(editor, /Allow other discounts/);
   assert.match(settingsRoute, /\.from\("discount_programs"\)/);
   assert.match(syncRoute, /syncShopifyDiscount/);
   assert.match(functionQuery, /inMensCollection: inAnyCollection/);
