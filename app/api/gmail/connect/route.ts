@@ -31,7 +31,6 @@ export async function GET(request: Request) {
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
-    login_hint: viewer.email,
     state,
   });
   return Response.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${parameters}`);
