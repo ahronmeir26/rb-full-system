@@ -357,27 +357,37 @@ function Correspondence({ school, refreshVersion, onEmail }: { school: School; r
 
   return <section className="panel tab-panel correspondence">
     <div className="panel-heading correspondence-heading"><div><p className="eyebrow">Complete history</p><h2>Correspondence with {school.admin || school.name}</h2><p className="panel-description">Incoming and sent emails, phone calls, and notes for this school. Select a message to expand it.</p></div><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={18} /> New email</button></div>
-    {!loading && records.length > 0 && <div className="correspondence-overview" aria-label="Correspondence totals"><span><strong>{incomingCount.toLocaleString()}</strong> incoming</span><span><strong>{outgoingCount.toLocaleString()}</strong> sent</span></div>}
+    {!loading && records.length > 0 && <div className="correspondence-overview" aria-label="Correspondence totals">
+      <span><i><MessageCircle size={15} /></i><small>All messages</small><strong>{records.length.toLocaleString()}</strong></span>
+      <span className="incoming"><i><Mail size={15} /></i><small>Incoming</small><strong>{incomingCount.toLocaleString()}</strong></span>
+      <span className="outgoing"><i><Send size={14} /></i><small>Sent</small><strong>{outgoingCount.toLocaleString()}</strong></span>
+    </div>}
     {loading ? <div className="empty-panel"><span className="empty-panel-icon"><Clock3 size={28} /></span><strong>Loading correspondence…</strong></div> : records.length ? <div className="correspondence-list">{records.map((record) => {
       const incoming = record.direction === "inbound";
       const from = record.from_email || (incoming ? "School contact" : "Appreciation Initiative");
       const to = record.to_email || (incoming ? "Appreciation Initiative" : "School contact");
+      const contactedAt = new Date(record.contacted_at);
+      const date = contactedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      const time = contactedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      const preview = record.body.replace(/\s+/g, " ").trim();
       return <details className={`correspondence-entry ${incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
-          <span className="correspondence-direction">{incoming ? "Incoming" : "Sent"}</span>
+          <span className="correspondence-avatar" aria-hidden="true">{incoming ? <Mail size={17} /> : <Send size={16} />}</span>
           <span className="correspondence-summary-copy">
+            <span className="correspondence-kicker"><b>{incoming ? "Incoming" : "Sent"}</b><span>{incoming ? from : `To ${to}`}</span></span>
             <strong>{record.subject || `${incoming ? "Incoming" : "Sent"} ${record.channel}`}</strong>
-            <small>{incoming ? `From ${from}` : `To ${to}`}</small>
+            <small className="correspondence-preview">{preview || "No message preview available"}</small>
           </span>
-          <span className="correspondence-summary-time"><time>{new Date(record.contacted_at).toLocaleString()}</time><ChevronDown size={17} aria-hidden="true" /></span>
+          <span className="correspondence-summary-time"><time><strong>{date}</strong><small>{time}</small></time><ChevronDown size={17} aria-hidden="true" /></span>
         </summary>
         <div className="correspondence-message">
+          <div className="correspondence-message-heading"><span><MessageCircle size={14} /> Message details</span><small>{incoming ? "Received" : "Sent"} {date} at {time}</small></div>
           <div className="correspondence-metadata">
             <span><small>From</small><strong>{from}</strong></span>
             <span><small>To</small><strong>{to}</strong></span>
           </div>
           <div className="correspondence-body">{record.body}</div>
-          <small className="correspondence-status">{record.channel} · {record.status}</small>
+          <div className="correspondence-status"><span>{record.channel}</span><span>{record.status}</span></div>
         </div>
       </details>;
     })}</div> : <div className="empty-panel"><span className="empty-panel-icon"><Mail size={28} /></span><strong>No correspondence recorded</strong><p>Once you send or receive an email or log a call, the complete conversation history will appear here.</p><button className="secondary-button empty-panel-action" onClick={onEmail} disabled={!school.email}><Mail size={17} /> Start a conversation</button></div>}
