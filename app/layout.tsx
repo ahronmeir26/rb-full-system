@@ -21,17 +21,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(origin),
-    title: "SchoolBridge — Program Operations",
+    title: "Appreciation Initiative — Program Operations",
     description: "School eligibility, forms, correspondence, and order fulfillment in one calm workspace.",
     openGraph: {
-      title: "SchoolBridge — Program Operations",
+      title: "Appreciation Initiative — Program Operations",
       description: "Program operations, connected.",
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1200, height: 630, alt: "SchoolBridge program operations dashboard" }],
+      images: [{ url: `${origin}/og.png`, width: 1440, height: 1440, alt: "A.I.STONE Appreciation Initiative" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "SchoolBridge — Program Operations",
+      title: "Appreciation Initiative — Program Operations",
       description: "Program operations, connected.",
       images: [`${origin}/og.png`],
     },
