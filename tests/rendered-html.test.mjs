@@ -181,6 +181,14 @@ test("keeps pre-engagement outreach separate and hides program status from the s
   assert.doesNotMatch(editor, /<th>Program status<\/th>/);
 });
 
+test("filters the school list by communication status", async () => {
+  const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
+  assert.match(editor, /school\.outreachStatus === filter/);
+  assert.match(editor, /<span>Communication:<\/span>/);
+  assert.match(editor, /outreachStatuses\.map\(\(status\) => <option/);
+  assert.doesNotMatch(editor, /school\.status === filter/);
+});
+
 test("school details participate in browser back and forward navigation", async () => {
   const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
   assert.match(editor, /history\.pushState/);
