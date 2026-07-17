@@ -161,7 +161,9 @@ function functionConfiguration(program: DiscountProgram) {
 function discountInput(program: DiscountProgram, includeFunctionId: boolean) {
   const input: Record<string, unknown> = {
     code: program.mainCode,
-    title: program.title,
+    // Shopify Admin draft orders currently fail to find/run app discounts when
+    // their internal title differs from the redeem code.
+    title: program.mainCode,
     discountClasses: ["PRODUCT"],
     appliesOncePerCustomer: program.appliesOncePerCustomer,
     combinesWith: {
@@ -205,6 +207,10 @@ async function createDiscount(program: DiscountProgram) {
 }
 
 async function updateDiscount(program: DiscountProgram) {
+  const input = discountInput(program, false);
+  // Once additional redeem codes have been bulk-added, Shopify rejects updates
+  // that include the primary code, even when its value is unchanged.
+  delete input.code;
   const mutation = `#graphql
     mutation UpdateAppreciationDiscount($id: ID!, $input: DiscountCodeAppInput!) {
       discountCodeAppUpdate(id: $id, codeAppDiscount: $input) {
@@ -217,7 +223,7 @@ async function updateDiscount(program: DiscountProgram) {
       codeAppDiscount: { discountId: string; status: string } | null;
       userErrors: ShopifyUserError[];
     };
-  }>(mutation, { id: program.shopifyDiscountId, input: discountInput(program, false) });
+  }>(mutation, { id: program.shopifyDiscountId, input });
   throwUserErrors(data.discountCodeAppUpdate.userErrors);
   if (!data.discountCodeAppUpdate.codeAppDiscount) throw new Error("Shopify did not update the discount.");
   return data.discountCodeAppUpdate.codeAppDiscount;

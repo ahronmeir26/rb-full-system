@@ -104,6 +104,8 @@ test("stores and manages the shared 2026 Shopify discount program", async () => 
   assert.match(settingsRoute, /\.from\("discount_programs"\)/);
   assert.match(syncRoute, /syncShopifyDiscount/);
   assert.match(shopify, /discountClasses:\s*\["PRODUCT"\]/);
+  assert.match(shopify, /title:\s*program\.mainCode/);
+  assert.match(shopify, /delete input\.code/);
   assert.match(functionQuery, /inMensCollection: inAnyCollection/);
   assert.match(functionQuery, /inBoysCollection: inAnyCollection/);
 });
