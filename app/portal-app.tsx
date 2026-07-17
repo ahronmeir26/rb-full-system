@@ -235,6 +235,7 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
   const hasMore = visibleCount < filtered.length;
 
   useEffect(() => {
+    if (selected) return;
     const target = loadMoreRef.current;
     if (!target || !hasMore) return;
     const observer = new IntersectionObserver((entries) => {
@@ -242,7 +243,7 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
     }, { rootMargin: "320px" });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, filtered.length, visibleCount]);
+  }, [selected, hasMore, filtered.length, visibleCount]);
 
   useEffect(() => {
     if (selected || returningSchoolIdRef.current === null) return;
