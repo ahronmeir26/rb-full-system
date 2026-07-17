@@ -35,6 +35,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
 
   const supabase = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   const storedCode = code || null;
+  if (hasCode && storedCode) {
+    const { data: duplicate } = await supabase
+      .from("schools")
+      .select("id,name")
+      .ilike("code", storedCode)
+      .neq("id", schoolId)
+      .maybeSingle();
+    if (duplicate) {
+      return Response.json({ error: `That 2026 code is already assigned to ${duplicate.name}.` }, { status: 409 });
+    }
+  }
   if (hasOutreachStatus) {
     const { data: status } = await supabase
       .from("school_outreach_statuses")
@@ -67,6 +78,33 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
     ]);
     if (programResult.error || statsResult.error) {
       console.error("Unable to synchronize normalized 2026 school code", programResult.error || statsResult.error);
+    }
+    const { data: discountProgram } = await supabase
+      .from("discount_programs")
+      .select("id")
+      .eq("program_year", 2026)
+      .maybeSingle();
+    if (discountProgram && storedCode) {
+      const { error: syncError } = await supabase.from("discount_school_codes").upsert({
+        discount_program_id: discountProgram.id,
+        school_id: schoolId,
+        program_year: 2026,
+        code: storedCode.toUpperCase(),
+        shopify_redeem_code_id: null,
+        sync_status: "pending",
+        last_synced_at: null,
+        last_sync_error: null,
+      }, { onConflict: "school_id,program_year" });
+      if (syncError) console.error("Unable to queue the school discount code for Shopify", syncError);
+    } else if (discountProgram && !storedCode) {
+      await supabase
+        .from("discount_school_codes")
+        .delete()
+        .eq("discount_program_id", discountProgram.id)
+        .eq("school_id", schoolId);
+    }
+    if (discountProgram) {
+      await supabase.from("discount_programs").update({ sync_status: "pending" }).eq("id", discountProgram.id);
     }
   }
 

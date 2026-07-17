@@ -42,6 +42,9 @@ create table if not exists public.schools (
 );
 
 create unique index if not exists schools_name_code_idx on public.schools (name, code);
+create unique index if not exists schools_2026_code_idx
+  on public.schools (lower(code))
+  where code is not null and btrim(code) <> '';
 create index if not exists schools_status_idx on public.schools (status);
 create index if not exists schools_email_idx on public.schools (lower(email));
 
@@ -341,6 +344,81 @@ create table if not exists public.invitation_recipients (
 create index if not exists invitation_recipients_campaign_status_idx
   on public.invitation_recipients (campaign_id, status);
 
+create table if not exists public.discount_programs (
+  id uuid primary key default gen_random_uuid(),
+  program_year integer not null check (program_year between 2000 and 2200),
+  title text not null,
+  main_code text,
+  mens_collection_id text,
+  mens_collection_title text,
+  mens_discount_type text not null default 'percentage'
+    check (mens_discount_type in ('percentage', 'fixed_amount')),
+  mens_discount_value numeric(10, 2) not null default 0
+    check (mens_discount_value >= 0),
+  boys_collection_id text,
+  boys_collection_title text,
+  boys_discount_type text not null default 'percentage'
+    check (boys_discount_type in ('percentage', 'fixed_amount')),
+  boys_discount_value numeric(10, 2) not null default 0
+    check (boys_discount_value >= 0),
+  starts_at timestamptz,
+  ends_at timestamptz,
+  usage_limit integer check (usage_limit is null or usage_limit > 0),
+  applies_once_per_customer boolean not null default false,
+  combines_with_order_discounts boolean not null default false,
+  combines_with_product_discounts boolean not null default false,
+  combines_with_shipping_discounts boolean not null default true,
+  active boolean not null default false,
+  shopify_discount_id text,
+  shopify_status text,
+  sync_status text not null default 'draft'
+    check (sync_status in ('draft', 'pending', 'synced', 'error')),
+  last_synced_at timestamptz,
+  last_sync_error text,
+  sync_job_ids jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (program_year),
+  unique (shopify_discount_id),
+  check (ends_at is null or starts_at is null or ends_at > starts_at),
+  check (mens_discount_type <> 'percentage' or mens_discount_value <= 100),
+  check (boys_discount_type <> 'percentage' or boys_discount_value <= 100)
+);
+
+insert into public.discount_programs (
+  program_year,
+  title,
+  mens_collection_title,
+  boys_collection_title
+)
+values (
+  2026,
+  '2026 Appreciation Program',
+  'Pre-order men''s shirts',
+  'Pre-order boys'' shirts'
+)
+on conflict (program_year) do nothing;
+
+create table if not exists public.discount_school_codes (
+  id uuid primary key default gen_random_uuid(),
+  discount_program_id uuid not null references public.discount_programs(id) on delete cascade,
+  school_id bigint not null references public.schools(id) on delete cascade,
+  program_year integer not null check (program_year between 2000 and 2200),
+  code text not null check (btrim(code) <> ''),
+  shopify_redeem_code_id text,
+  sync_status text not null default 'pending'
+    check (sync_status in ('pending', 'synced', 'error', 'removed')),
+  last_synced_at timestamptz,
+  last_sync_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (school_id, program_year),
+  unique (program_year, code)
+);
+
+create index if not exists discount_school_codes_program_status_idx
+  on public.discount_school_codes (discount_program_id, sync_status);
+
 create table if not exists public.order_submissions (
   id uuid primary key default gen_random_uuid(),
   school_id bigint not null references public.schools(id) on delete cascade,
@@ -377,7 +455,7 @@ begin
     'school_year_stats', 'school_outreach_statuses',
     'school_outreach_status_history', 'form_templates', 'form_submissions',
     'correspondence', 'invitation_campaigns', 'invitation_recipients',
-    'order_submissions'
+    'discount_programs', 'discount_school_codes', 'order_submissions'
   ]
   loop
     execute format('drop trigger if exists set_%I_updated_at on public.%I', table_name, table_name);
@@ -395,6 +473,8 @@ comment on table public.schools is 'School directory plus workbook-compatible ag
 comment on table public.school_outreach_statuses is 'Built-in and administrator-created outreach statuses available to every school.';
 comment on table public.school_outreach_status_history is 'Append-only history of outreach status changes for each school.';
 comment on table public.school_year_stats is 'Normalized yearly school codes and order totals for 2024, 2025, 2026, and future years.';
+comment on table public.discount_programs is 'Shared Shopify discount configuration for each Appreciation Program year.';
+comment on table public.discount_school_codes is 'Per-school redeem-code synchronization state for a yearly Shopify discount.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';
 

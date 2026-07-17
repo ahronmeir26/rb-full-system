@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PDFDocument } from "pdf-lib";
 import { customizeAppreciationOrderForm } from "../lib/appreciation-order-form.ts";
+import { cartLinesDiscountsGenerateRun } from "../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.js";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -56,6 +57,8 @@ test("database schema covers the complete school-program workflow", async () => 
     "correspondence",
     "invitation_campaigns",
     "invitation_recipients",
+    "discount_programs",
+    "discount_school_codes",
     "order_submissions",
   ]) {
     assert.match(schema, new RegExp(`create table if not exists public\\.${table}`));
@@ -74,6 +77,55 @@ test("database schema covers the complete school-program workflow", async () => 
   assert.match(importer, /program_year: 2026/);
   assert.match(importer, /program_year: 2025/);
   assert.match(importer, /program_year: 2024/);
+});
+
+test("stores and manages the shared 2026 Shopify discount program", async () => {
+  const [schema, editor, settingsRoute, syncRoute, functionQuery] = await Promise.all([
+    readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/discounts-section.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/discounts/2026/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/discounts/2026/sync/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.graphql", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(schema, /mens_discount_value numeric/);
+  assert.match(schema, /boys_discount_value numeric/);
+  assert.match(schema, /shopify_discount_id text/);
+  assert.match(schema, /unique \(program_year, code\)/);
+  assert.match(editor, /Pre-order men's shirts/);
+  assert.match(editor, /Pre-order boys' shirts/);
+  assert.match(editor, /Sync all 2026 codes/);
+  assert.match(settingsRoute, /\.from\("discount_programs"\)/);
+  assert.match(syncRoute, /syncShopifyDiscount/);
+  assert.match(functionQuery, /inMensCollection: inAnyCollection/);
+  assert.match(functionQuery, /inBoysCollection: inAnyCollection/);
+});
+
+test("Shopify function applies independent men's and boys' discounts", () => {
+  const result = cartLinesDiscountsGenerateRun({
+    cart: {
+      lines: [
+        { id: "mens-line", merchandise: { __typename: "ProductVariant", inMensCollection: true, inBoysCollection: false } },
+        { id: "boys-line", merchandise: { __typename: "ProductVariant", inMensCollection: false, inBoysCollection: true } },
+        { id: "other-line", merchandise: { __typename: "ProductVariant", inMensCollection: false, inBoysCollection: false } },
+      ],
+    },
+    discount: {
+      metafield: {
+        jsonValue: {
+          mensDiscount: { type: "percentage", value: 25 },
+          boysDiscount: { type: "fixed_amount", value: 8.5 },
+        },
+      },
+    },
+  });
+  const operation = result.operations[0].productDiscountsAdd;
+  assert.equal(operation.selectionStrategy, "ALL");
+  assert.equal(operation.candidates.length, 2);
+  assert.deepEqual(operation.candidates[0].value, { percentage: { value: "25.00" } });
+  assert.deepEqual(operation.candidates[1].value, { fixedAmount: { amount: "8.50", appliesToEachItem: true } });
+  assert.deepEqual(operation.candidates[0].targets, [{ cartLine: { id: "mens-line" } }]);
+  assert.deepEqual(operation.candidates[1].targets, [{ cartLine: { id: "boys-line" } }]);
 });
 
 test("2026 coupon codes start blank and remain admin-editable", async () => {

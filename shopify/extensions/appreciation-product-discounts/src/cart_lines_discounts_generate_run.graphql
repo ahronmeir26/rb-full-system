@@ -1,0 +1,22 @@
+query Input($mensCollectionIds: [ID!]!, $boysCollectionIds: [ID!]!) {
+  cart {
+    lines {
+      id
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          inMensCollection: inAnyCollection(ids: $mensCollectionIds)
+          inBoysCollection: inAnyCollection(ids: $boysCollectionIds)
+        }
+      }
+    }
+  }
+  discount {
+    metafield(
+      namespace: "$app:appreciation-product-discounts"
+      key: "function-configuration"
+    ) {
+      jsonValue
+    }
+  }
+}

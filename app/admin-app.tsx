@@ -3,6 +3,7 @@
 import Image from "next/image";
 import {
   ArrowLeft,
+  BadgePercent,
   Bell,
   Building2,
   CheckCircle2,
@@ -22,8 +23,9 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
+import type { DiscountProgram, OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
+import { DiscountsSection } from "./discounts-section";
 
 const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-");
 
@@ -325,7 +327,7 @@ function SettingsModal({ email, onClose }: { email: string; onClose: () => void 
   </div>;
 }
 
-export function AdminApp({ initialSchools, initialOutreachStatuses, dataSource, viewer }: { initialSchools: School[]; initialOutreachStatuses: OutreachStatus[]; dataSource: "supabase" | "workbook"; viewer: Viewer }) {
+export function AdminApp({ initialSchools, initialOutreachStatuses, initialDiscountProgram, dataSource, viewer }: { initialSchools: School[]; initialOutreachStatuses: OutreachStatus[]; initialDiscountProgram: DiscountProgram; dataSource: "supabase" | "workbook"; viewer: Viewer }) {
   const [schools, setSchools] = useState(initialSchools);
   const [outreachStatuses, setOutreachStatuses] = useState(initialOutreachStatuses);
   const [selected, setSelected] = useState<School | null>(null);
@@ -333,6 +335,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, dataSource, 
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [section, setSection] = useState<"overview" | "discounts">("overview");
   const [sent, setSent] = useState(false);
   const [correspondenceVersion, setCorrespondenceVersion] = useState(0);
   const [search, setSearch] = useState("");
@@ -377,6 +380,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, dataSource, 
     attention: sum.attention + (school.email.includes("@") ? 0 : 1),
   }), { orders2026: 0, orders2025: 0, orders2024: 0, attention: 0 }), [schools]);
   const recipientCount = useMemo(() => schools.filter((school) => school.email.includes("@")).length, [schools]);
+  const assignedSchoolCodes = useMemo(() => schools.filter((school) => school.code.trim()).length, [schools]);
 
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -396,6 +400,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, dataSource, 
         <Logo />
         <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
         <div className="topbar-actions">
+          <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={() => { setSelected(null); setSection(section === "discounts" ? "overview" : "discounts"); }}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
           <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
           <div className="topbar-account">
             <span className="user-avatar">{viewer.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
@@ -405,7 +410,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, dataSource, 
         </div>
       </header>
 
-      {selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
         <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Email every school</button></div></div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}

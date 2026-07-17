@@ -5,6 +5,37 @@ export type OutreachStatus = {
   isSystem: boolean;
 };
 
+export type DiscountValueType = "percentage" | "fixed_amount";
+export type DiscountSyncStatus = "draft" | "pending" | "synced" | "error";
+
+export type DiscountProgram = {
+  id: string;
+  programYear: number;
+  title: string;
+  mainCode: string;
+  mensCollectionId: string;
+  mensCollectionTitle: string;
+  mensDiscountType: DiscountValueType;
+  mensDiscountValue: number;
+  boysCollectionId: string;
+  boysCollectionTitle: string;
+  boysDiscountType: DiscountValueType;
+  boysDiscountValue: number;
+  startsAt: string;
+  endsAt: string;
+  usageLimit: number | null;
+  appliesOncePerCustomer: boolean;
+  combinesWithOrderDiscounts: boolean;
+  combinesWithProductDiscounts: boolean;
+  combinesWithShippingDiscounts: boolean;
+  active: boolean;
+  shopifyDiscountId: string;
+  shopifyStatus: string;
+  syncStatus: DiscountSyncStatus;
+  lastSyncedAt: string;
+  lastSyncError: string;
+};
+
 export type School = {
   id: number;
   name: string;
