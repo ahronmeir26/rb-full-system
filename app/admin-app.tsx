@@ -63,7 +63,7 @@ function OrderFormDownload({ school, className = "secondary-button" }: { school:
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
   const contactName = school.admin || "school administrator";
   const [subject, setSubject] = useState("Your school program forms and next steps");
-  const [message, setMessage] = useState(`Hi ${contactName.split(" ")[0]},\n\nPlease review your school's program information and next steps in the portal.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team`);
+  const [message, setMessage] = useState(`Hi ${contactName.split(" ")[0]},\n\nPlease review your school's program information and next steps below.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team`);
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Compose email" onMouseDown={(event) => event.stopPropagation()}>
