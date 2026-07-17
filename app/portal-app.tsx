@@ -224,6 +224,8 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
   const [filter, setFilter] = useState<Status | "All">("All");
   const [visibleCount, setVisibleCount] = useState(30);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const schoolsSectionRef = useRef<HTMLElement>(null);
+  const returningSchoolIdRef = useRef<number | null>(null);
 
   const filtered = useMemo(() => schools.filter((school) => {
     const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.code}`.toLowerCase().includes(search.toLowerCase());
@@ -241,6 +243,17 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
     observer.observe(target);
     return () => observer.disconnect();
   }, [hasMore, filtered.length, visibleCount]);
+
+  useEffect(() => {
+    if (selected || returningSchoolIdRef.current === null) return;
+    const schoolId = returningSchoolIdRef.current;
+    const frame = requestAnimationFrame(() => {
+      const row = schoolsSectionRef.current?.querySelector<HTMLElement>(`[data-school-id="${schoolId}"]`);
+      (row ?? schoolsSectionRef.current)?.scrollIntoView({ block: row ? "center" : "start" });
+      returningSchoolIdRef.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
   const totals = useMemo(() => schools.reduce((sum, school) => ({
     orders2026: sum.orders2026 + school.orders2026,
     orders2025: sum.orders2025 + school.orders2025,
@@ -272,7 +285,7 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
         </div>
       </header>
 
-      {selected ? <SchoolDetail school={selected} onBack={() => setSelected(null)} onEmail={() => setEmailSchool(selected)} /> : <main className="content">
+      {selected ? <SchoolDetail school={selected} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} /> : <main className="content">
         <div className="page-heading"><div><p className="eyebrow">Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Here’s what’s recorded across your school network.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Invite every school</button></div></div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
@@ -288,9 +301,9 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
           <div className="attention-icon"><Bell size={19} /></div><div><strong>{totals.attention.toLocaleString()} schools need contact information</strong><p>These records are missing a usable administrator email.</p></div>
         </section>
 
-        <section className="schools-section">
+        <section ref={schoolsSectionRef} className="schools-section">
           <div className="section-heading"><div><h2>Schools</h2><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Status:</span><select value={filter} onChange={(e) => { setFilter(e.target.value as Status | "All"); setVisibleCount(30); }}><option>All</option><option>Ready to order</option><option>In progress</option><option>Needs attention</option><option>Not started</option></select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Program status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} onClick={() => setSelected(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className={`status ${statusClass(school.status)}`}>{school.status}</span><div className="mini-progress"><span style={{ width: `${school.progress}%` }} /></div></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status filter.</p></div>}</div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Program status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => setSelected(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className={`status ${statusClass(school.status)}`}>{school.status}</span><div className="mini-progress"><span style={{ width: `${school.progress}%` }} /></div></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status filter.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
