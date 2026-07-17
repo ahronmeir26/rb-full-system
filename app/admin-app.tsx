@@ -501,8 +501,9 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
   const [records, setRecords] = useState<CorrespondenceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingNote, setAddingNote] = useState(false);
-  const incomingCount = records.filter((record) => record.direction === "inbound").length;
-  const outgoingCount = records.length - incomingCount;
+  const noteCount = records.filter((record) => record.channel === "note").length;
+  const incomingCount = records.filter((record) => record.direction === "inbound" && record.channel !== "note").length;
+  const outgoingCount = records.length - incomingCount - noteCount;
 
   useEffect(() => {
     let active = true;
@@ -525,6 +526,7 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
       <span><i><MessageCircle size={15} /></i><small>All messages</small><strong>{records.length.toLocaleString()}</strong></span>
       <span className="incoming"><i><Mail size={15} /></i><small>Incoming</small><strong>{incomingCount.toLocaleString()}</strong></span>
       <span className="outgoing"><i><Send size={14} /></i><small>Sent</small><strong>{outgoingCount.toLocaleString()}</strong></span>
+      <span className="note"><i><MessageCircle size={15} /></i><small>Notes</small><strong>{noteCount.toLocaleString()}</strong></span>
     </div>}
     {loading ? <div className="empty-panel"><span className="empty-panel-icon"><Clock3 size={28} /></span><strong>Loading correspondence…</strong></div> : records.length ? <div className="correspondence-list">{records.map((record) => {
       const incoming = record.direction === "inbound";
@@ -534,7 +536,7 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
       const date = formatDate(record.contacted_at, messageDateFormatter);
       const time = formatDate(record.contacted_at, messageTimeFormatter);
       const preview = record.body.replace(/\s+/g, " ").trim();
-      return <details className={`correspondence-entry ${incoming ? "incoming" : "outgoing"}`} key={record.id}>
+      return <details className={`correspondence-entry ${isNote ? "note" : incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
           <span className="correspondence-avatar" aria-hidden="true">{isNote ? <MessageCircle size={17} /> : incoming ? <Mail size={17} /> : <Send size={16} />}</span>
           <span className="correspondence-summary-copy">
@@ -907,7 +909,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
 
         <section ref={schoolsSectionRef} className="schools-section">
           <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span>{replyNeededCount > 0 && <button className="reply-needed-filter" onClick={() => { setFilter("Reply needed"); setVisibleCount(30); }}><Mail size={14} /> {replyNeededCount} {replyNeededCount === 1 ? "reply" : "replies"} needed</button>}</div><p>See the current program stage, orders, and anything that needs attention.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="School, contact, email, or code" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Stage:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by program stage" value={filter} onChange={(e) => { setFilter(e.target.value as SchoolFilter); setVisibleCount(30); }}><option>All</option><option>Reply needed</option><option>Needs attention</option><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Complete</option></select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>2026 stage</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const stage = programStageFor(school); const reason = attentionReasonFor(school); return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={stage} /></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span></td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or program stage.</p></div>}</div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>2026 stage</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const stage = programStageFor(school); const reason = attentionReasonFor(school); return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={stage} /></td><td>{school.orders2026 ? <strong className="number-cell">{school.orders2026.toLocaleString()}</strong> : <span className="muted-number">—</span>}</td><td><span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span></td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className={`code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or program stage.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
