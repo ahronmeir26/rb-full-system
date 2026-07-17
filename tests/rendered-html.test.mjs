@@ -194,6 +194,15 @@ test("overview omits the bulk and shortcut email buttons", async () => {
   assert.doesNotMatch(editor, /BulkEmailModal/);
 });
 
+test("overview keeps compact program stats in the welcome heading without the contact banner", async () => {
+  const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
+  assert.match(editor, /className="page-heading overview-heading"/);
+  assert.match(editor, /className="stats-grid"/);
+  assert.match(editor, /className="source-badge schools-source-badge"/);
+  assert.doesNotMatch(editor, /className="attention-card"/);
+  assert.doesNotMatch(editor, /schools need contact information/);
+});
+
 test("generates a four-page appreciation order form for a school's coupon code", async () => {
   const template = await readFile(new URL("../assets/forms/ai-stone-appreciation-order-form-template.pdf", import.meta.url));
   const customized = await customizeAppreciationOrderForm(template, "PESACH26-TEST");

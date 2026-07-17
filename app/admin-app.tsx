@@ -4,7 +4,6 @@ import Image from "next/image";
 import {
   ArrowLeft,
   BadgePercent,
-  Bell,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -444,23 +443,20 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       </header>
 
       {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
-        <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div></div>
+        <div className="page-heading overview-heading">
+          <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
+          <section className="stats-grid" aria-label="Program summary">
+            <StatCard icon={<Building2 size={17} />} value={schools.length.toLocaleString()} label="Schools in directory" note={`${recipientCount.toLocaleString()} have email contacts`} tone="blue-tone" />
+            <StatCard icon={<ShoppingBag size={17} />} value={totals.orders2026.toLocaleString()} label="2026 orders" note="This year" tone="green-tone" />
+            <StatCard icon={<Clock3 size={17} />} value={totals.orders2025.toLocaleString()} label="2025 orders" note="Workbook import" tone="orange-tone" />
+            <StatCard icon={<MessageCircle size={17} />} value={totals.orders2024.toLocaleString()} label="2024 orders" note="Workbook import" tone="violet-tone" />
+          </section>
+        </div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
 
-        <section className="stats-grid" aria-label="Program summary">
-          <StatCard icon={<Building2 size={20} />} value={schools.length.toLocaleString()} label="Schools in directory" note={`${recipientCount.toLocaleString()} have email contacts`} tone="blue-tone" />
-          <StatCard icon={<ShoppingBag size={20} />} value={totals.orders2026.toLocaleString()} label="2026 orders" note="This year" tone="green-tone" />
-          <StatCard icon={<Clock3 size={20} />} value={totals.orders2025.toLocaleString()} label="2025 orders" note="Imported from the workbook" tone="orange-tone" />
-          <StatCard icon={<MessageCircle size={20} />} value={totals.orders2024.toLocaleString()} label="2024 orders" note="Imported from the workbook" tone="violet-tone" />
-        </section>
-
-        <section className="attention-card">
-          <div className="attention-icon"><Bell size={19} /></div><div><strong>{totals.attention.toLocaleString()} schools need contact information</strong><p>These records are missing a usable administrator email.</p></div>
-        </section>
-
         <section ref={schoolsSectionRef} className="schools-section">
-          <div className="section-heading"><div><h2>Schools</h2><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Status:</span><select value={filter} onChange={(e) => { setFilter(e.target.value as Status | "All"); setVisibleCount(30); }}><option>All</option><option>Ready to order</option><option>In progress</option><option>Needs attention</option><option>Not started</option></select><ChevronDown size={14} /></label></div></div>
+          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Status:</span><select value={filter} onChange={(e) => { setFilter(e.target.value as Status | "All"); setVisibleCount(30); }}><option>All</option><option>Ready to order</option><option>In progress</option><option>Needs attention</option><option>Not started</option></select><ChevronDown size={14} /></label></div></div>
           <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className="outreach-pill">{school.outreachStatus}</span></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status filter.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
