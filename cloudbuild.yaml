@@ -6,6 +6,11 @@ steps:
       - us-central1-docker.pkg.dev/$PROJECT_ID/dial-haven/rb-bridge:$COMMIT_SHA
       - .
 
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/dial-haven/rb-bridge:$COMMIT_SHA
+
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
