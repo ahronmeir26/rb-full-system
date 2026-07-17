@@ -1,13 +1,11 @@
-import orderFormTemplate from "../../../../assets/forms/ai-stone-appreciation-order-form-template.pdf?inline";
 import { customizeAppreciationOrderForm } from "@/lib/appreciation-order-form";
 import { getViewer } from "@/lib/auth";
 import { loadSchools } from "@/lib/school-data";
 
-function decodeTemplate(dataUri: string) {
-  const separator = dataUri.indexOf(",");
-  if (separator < 0) throw new Error("The embedded order-form template is invalid.");
-  const binary = atob(dataUri.slice(separator + 1));
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+async function loadTemplate(request: Request) {
+  const response = await fetch(new URL("/forms/ai-stone-appreciation-order-form-template.pdf", request.url));
+  if (!response.ok) throw new Error("The order-form template could not be loaded.");
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 function safeFilenamePart(value: string) {
@@ -39,7 +37,7 @@ export async function GET(request: Request) {
 
   try {
     const customized = await customizeAppreciationOrderForm(
-      decodeTemplate(orderFormTemplate),
+      await loadTemplate(request),
       couponCode,
     );
     const filename = `ai-stone-order-form-${safeFilenamePart(school.name)}.pdf`;

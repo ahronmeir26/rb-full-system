@@ -1,0 +1,10 @@
+.env
+.env.*
+.git
+.github
+.next
+.open-next
+.wrangler
+node_modules
+npm-debug.log*
+shopify/extensions/*/node_modules
