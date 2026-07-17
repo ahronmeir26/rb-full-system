@@ -240,7 +240,7 @@ export function PortalApp({ initialSchools, dataSource, viewer }: { initialSchoo
     }, { rootMargin: "320px" });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMore, filtered.length]);
+  }, [hasMore, filtered.length, visibleCount]);
   const totals = useMemo(() => schools.reduce((sum, school) => ({
     orders2026: sum.orders2026 + school.orders2026,
     orders2025: sum.orders2025 + school.orders2025,
