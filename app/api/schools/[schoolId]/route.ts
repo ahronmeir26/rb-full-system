@@ -12,13 +12,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   }
 
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.code !== "string") {
-    return Response.json({ error: "A coupon code is required." }, { status: 400 });
+  const hasCode = body && typeof body.code === "string";
+  const hasOutreachStatus = body && typeof body.outreachStatus === "string";
+  if (!hasCode && !hasOutreachStatus) {
+    return Response.json({ error: "A coupon code or outreach status is required." }, { status: 400 });
   }
 
-  const code = body.code.trim();
-  if (code.length > 64 || /[\u0000-\u001f\u007f]/.test(code)) {
+  const code = hasCode ? body.code.trim() : "";
+  const outreachStatus = hasOutreachStatus ? body.outreachStatus.trim() : "";
+  if (hasCode && (code.length > 64 || /[\u0000-\u001f\u007f]/.test(code))) {
     return Response.json({ error: "The coupon code must be 64 characters or fewer." }, { status: 400 });
+  }
+  if (hasOutreachStatus && (!outreachStatus || outreachStatus.length > 64)) {
+    return Response.json({ error: "A valid outreach status is required." }, { status: 400 });
   }
 
   const url = process.env.SUPABASE_URL;
@@ -29,9 +35,21 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
 
   const supabase = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
   const storedCode = code || null;
+  if (hasOutreachStatus) {
+    const { data: status } = await supabase
+      .from("school_outreach_statuses")
+      .select("name")
+      .eq("name", outreachStatus)
+      .maybeSingle();
+    if (!status) return Response.json({ error: "That outreach status does not exist." }, { status: 400 });
+  }
+
+  const updates: { code?: string | null; outreach_status?: string } = {};
+  if (hasCode) updates.code = storedCode;
+  if (hasOutreachStatus) updates.outreach_status = outreachStatus;
   const { data: school, error } = await supabase
     .from("schools")
-    .update({ code: storedCode })
+    .update(updates)
     .eq("id", schoolId)
     .select("id")
     .maybeSingle();
@@ -42,13 +60,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   }
   if (!school) return Response.json({ error: "School not found." }, { status: 404 });
 
-  const [programResult, statsResult] = await Promise.all([
-    supabase.from("school_programs").update({ school_code: storedCode }).eq("school_id", schoolId).eq("program_year", 2026),
-    supabase.from("school_year_stats").update({ school_code: storedCode }).eq("school_id", schoolId).eq("program_year", 2026),
-  ]);
-  if (programResult.error || statsResult.error) {
-    console.error("Unable to synchronize normalized 2026 school code", programResult.error || statsResult.error);
+  if (hasCode) {
+    const [programResult, statsResult] = await Promise.all([
+      supabase.from("school_programs").update({ school_code: storedCode }).eq("school_id", schoolId).eq("program_year", 2026),
+      supabase.from("school_year_stats").update({ school_code: storedCode }).eq("school_id", schoolId).eq("program_year", 2026),
+    ]);
+    if (programResult.error || statsResult.error) {
+      console.error("Unable to synchronize normalized 2026 school code", programResult.error || statsResult.error);
+    }
   }
 
-  return Response.json({ code });
+  return Response.json({
+    code: hasCode ? code : undefined,
+    outreachStatus: hasOutreachStatus ? outreachStatus : undefined,
+  });
 }

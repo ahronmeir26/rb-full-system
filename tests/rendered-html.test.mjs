@@ -49,6 +49,8 @@ test("database schema covers the complete school-program workflow", async () => 
     "school_contacts",
     "school_programs",
     "school_year_stats",
+    "school_outreach_statuses",
+    "school_outreach_status_history",
     "form_templates",
     "form_submissions",
     "correspondence",
@@ -90,7 +92,28 @@ test("2026 coupon codes start blank and remain admin-editable", async () => {
   assert.doesNotMatch(supabaseSync, /^\s+code: school\.code/m);
   assert.match(editor, /2026 coupon code/);
   assert.match(editor, /Edit school/);
-  assert.match(updateRoute, /\.update\(\{ code: storedCode \}\)/);
+  assert.match(updateRoute, /\.update\(updates\)/);
+});
+
+test("supports custom outreach statuses and complete contact history", async () => {
+  const [schema, editor, correspondenceRoute, statusRoute] = await Promise.all([
+    readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/correspondence/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/outreach-statuses/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  for (const status of ["Sent invite", "Not interested", "Interested", "Sent"]) {
+    assert.match(schema, new RegExp(`'${status}'`));
+  }
+  assert.match(schema, /foreign key \(outreach_status\) references public\.school_outreach_statuses\(name\)/);
+  assert.match(schema, /record_school_outreach_status/);
+  assert.match(schema, /contacted_at timestamptz not null default now\(\)/);
+  assert.match(schema, /update_school_last_contacted_at/);
+  assert.match(editor, /Create a custom status/);
+  assert.match(editor, /Complete history/);
+  assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\)/);
+  assert.match(statusRoute, /\.from\("school_outreach_statuses"\)/);
 });
 
 test("generates a four-page appreciation order form for a school's coupon code", async () => {

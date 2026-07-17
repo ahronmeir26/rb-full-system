@@ -18,6 +18,8 @@ create table if not exists public.schools (
   state text,
   school_type text not null default 'regular'
     check (school_type in ('regular', 'chassidish')),
+  outreach_status text not null default 'Sent invite',
+  last_contacted_at timestamptz,
   code text,
   code_2025 text,
   code_2024 text,
@@ -54,6 +56,76 @@ alter table public.schools drop constraint if exists schools_school_type_check;
 alter table public.schools
   add constraint schools_school_type_check
   check (school_type in ('regular', 'chassidish'));
+alter table public.schools add column if not exists outreach_status text;
+alter table public.schools add column if not exists last_contacted_at timestamptz;
+
+create table if not exists public.school_outreach_statuses (
+  name text primary key check (btrim(name) <> ''),
+  is_system boolean not null default false,
+  sort_order integer not null default 100 check (sort_order >= 0),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists school_outreach_statuses_name_idx
+  on public.school_outreach_statuses (lower(name));
+
+insert into public.school_outreach_statuses (name, is_system, sort_order)
+values
+  ('Sent invite', true, 10),
+  ('Not interested', true, 20),
+  ('Interested', true, 30),
+  ('Sent', true, 40)
+on conflict (name) do update
+set is_system = excluded.is_system,
+    sort_order = excluded.sort_order;
+
+update public.schools set outreach_status = 'Sent invite' where outreach_status is null;
+alter table public.schools alter column outreach_status set default 'Sent invite';
+alter table public.schools alter column outreach_status set not null;
+alter table public.schools drop constraint if exists schools_outreach_status_fkey;
+alter table public.schools
+  add constraint schools_outreach_status_fkey
+  foreign key (outreach_status) references public.school_outreach_statuses(name);
+
+create table if not exists public.school_outreach_status_history (
+  id uuid primary key default gen_random_uuid(),
+  school_id bigint not null references public.schools(id) on delete cascade,
+  status_name text not null references public.school_outreach_statuses(name),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists school_outreach_status_history_school_created_idx
+  on public.school_outreach_status_history (school_id, created_at desc);
+
+insert into public.school_outreach_status_history (school_id, status_name)
+select school.id, school.outreach_status
+from public.schools school
+where not exists (
+  select 1
+  from public.school_outreach_status_history history
+  where history.school_id = school.id
+);
+
+create or replace function public.record_school_outreach_status()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.outreach_status is distinct from old.outreach_status then
+    insert into public.school_outreach_status_history (school_id, status_name)
+    values (new.id, new.outreach_status);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists record_school_outreach_status on public.schools;
+create trigger record_school_outreach_status
+after update of outreach_status on public.schools
+for each row execute function public.record_school_outreach_status();
 
 create table if not exists public.user_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -179,6 +251,7 @@ create table if not exists public.correspondence (
   status text not null default 'draft'
     check (status in ('draft', 'queued', 'sent', 'delivered', 'failed', 'received')),
   external_message_id text,
+  contacted_at timestamptz not null default now(),
   sent_at timestamptz,
   received_at timestamptz,
   created_by uuid references auth.users(id) on delete set null,
@@ -188,6 +261,46 @@ create table if not exists public.correspondence (
 
 create index if not exists correspondence_school_created_idx
   on public.correspondence (school_id, created_at desc);
+
+alter table public.correspondence add column if not exists contacted_at timestamptz;
+update public.correspondence
+set contacted_at = coalesce(sent_at, received_at, created_at, now())
+where contacted_at is null;
+alter table public.correspondence alter column contacted_at set default now();
+alter table public.correspondence alter column contacted_at set not null;
+
+create or replace function public.update_school_last_contacted_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  update public.schools
+  set last_contacted_at = greatest(
+    coalesce(last_contacted_at, new.contacted_at),
+    new.contacted_at
+  )
+  where id = new.school_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists update_school_last_contacted_at on public.correspondence;
+create trigger update_school_last_contacted_at
+after insert on public.correspondence
+for each row execute function public.update_school_last_contacted_at();
+
+update public.schools school
+set last_contacted_at = latest.contacted_at
+from (
+  select school_id, max(contacted_at) as contacted_at
+  from public.correspondence
+  group by school_id
+) latest
+where school.id = latest.school_id
+  and (
+    school.last_contacted_at is null
+    or school.last_contacted_at < latest.contacted_at
+  );
 
 create table if not exists public.invitation_campaigns (
   id uuid primary key default gen_random_uuid(),
@@ -261,7 +374,8 @@ declare
 begin
   foreach table_name in array array[
     'schools', 'user_profiles', 'school_contacts', 'school_programs',
-    'school_year_stats', 'form_templates', 'form_submissions',
+    'school_year_stats', 'school_outreach_statuses',
+    'school_outreach_status_history', 'form_templates', 'form_submissions',
     'correspondence', 'invitation_campaigns', 'invitation_recipients',
     'order_submissions'
   ]
@@ -278,6 +392,8 @@ end;
 $$;
 
 comment on table public.schools is 'School directory plus workbook-compatible aggregate fields used by the current dashboard.';
+comment on table public.school_outreach_statuses is 'Built-in and administrator-created outreach statuses available to every school.';
+comment on table public.school_outreach_status_history is 'Append-only history of outreach status changes for each school.';
 comment on table public.school_year_stats is 'Normalized yearly school codes and order totals for 2024, 2025, 2026, and future years.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import seedSchools from "@/app/school-data.generated.json";
-import type { School, SchoolStatus, SchoolType } from "./types";
+import type { OutreachStatus, School, SchoolStatus, SchoolType } from "./types";
 
 type SchoolRow = Partial<School> & Record<string, unknown>;
 
@@ -19,6 +19,8 @@ function mapSchool(row: SchoolRow, index: number): School {
     id: asNumber(row.id, index + 1),
     name: String(row.name ?? fallback.name),
     schoolType: schoolTypes.has(rawSchoolType) ? rawSchoolType : "regular",
+    outreachStatus: String(row.outreachStatus ?? row.outreach_status ?? fallback.outreachStatus ?? "Sent invite"),
+    lastContactedAt: String(row.lastContactedAt ?? row.last_contacted_at ?? fallback.lastContactedAt ?? ""),
     district: String(row.district ?? fallback.district),
     city: String(row.city ?? fallback.city),
     state: String(row.state ?? fallback.state),
@@ -39,6 +41,30 @@ function mapSchool(row: SchoolRow, index: number): School {
     initials: String(row.initials ?? fallback.initials),
     color: String(row.color ?? fallback.color),
   };
+}
+
+const defaultOutreachStatuses: OutreachStatus[] = [
+  { name: "Sent invite", isSystem: true },
+  { name: "Not interested", isSystem: true },
+  { name: "Interested", isSystem: true },
+  { name: "Sent", isSystem: true },
+];
+
+export async function loadOutreachStatuses(): Promise<OutreachStatus[]> {
+  const url = process.env.SUPABASE_URL;
+  const secret = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secret) return defaultOutreachStatuses;
+
+  const supabase = createClient(url, secret, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await supabase
+    .from("school_outreach_statuses")
+    .select("name,is_system")
+    .order("sort_order")
+    .order("name");
+  if (error || !data?.length) return defaultOutreachStatuses;
+  return data.map((status) => ({ name: status.name, isSystem: status.is_system }));
 }
 
 export async function loadSchools(schoolId?: number): Promise<{ schools: School[]; source: "supabase" | "workbook" }> {

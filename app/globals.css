@@ -122,6 +122,7 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .in-progress { color: #3e536a; background: #e2edf7; }
 .needs-attention { color: #824d33; background: #f0d5c6; }
 .not-started { color: #616872; background: #eee5e0; }
+.outreach-pill { width: fit-content; padding: 5px 8px; border-radius: 12px; display: inline-flex; color: #3e536a; background: #e2edf7; text-transform: none; letter-spacing: 0; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .mini-progress { width: 76px; height: 3px; margin-top: 6px; border-radius: 2px; overflow: hidden; background: #eee5e0; }
 .mini-progress span, .progress-track span { height: 100%; display: block; border-radius: inherit; background: var(--brand); }
 .number-cell { font-size: 13px; }
@@ -192,6 +193,12 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .success-banner button { border: 0; background: transparent; color: inherit; cursor: pointer; }
 .dismissible { margin-top: 16px; }
 .correspondence { max-width: 940px; }
+.correspondence-list { margin-top: 20px; display: grid; gap: 10px; }
+.correspondence-entry { padding: 15px 16px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafc; }
+.correspondence-entry > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.correspondence-entry time, .correspondence-entry small { color: #7d8783; font-size: 9px; }
+.correspondence-entry > strong { margin-top: 10px; display: block; font-size: 11px; }
+.correspondence-entry p { margin: 7px 0; color: #56635e; line-height: 1.55; font-size: 10px; white-space: pre-wrap; }
 .thread { margin-top: 24px; }
 .thread-item { position: relative; padding: 0 0 24px 48px; display: flex; gap: 12px; }
 .thread-item:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 1px; background: var(--line); }
@@ -320,6 +327,7 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .school-data-panel > div:last-child { border-bottom: 0; }
 .school-data-panel span { color: #7d8783; text-transform: uppercase; letter-spacing: .055em; font-size: 8px; font-weight: 720; }
 .school-data-panel strong { color: #333b38; font-size: 11px; }
+.school-data-panel .outreach-pill { color: #3e536a; text-transform: none; letter-spacing: 0; font-size: 9px; }
 .school-data-panel small { color: #7d8783; font-size: 9px; overflow-wrap: anywhere; }
 .school-year-row { grid-template-columns: 48px 1fr; align-items: center; }
 .school-year-row small { grid-column: 2; }
@@ -339,8 +347,10 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .edit-school-modal { width: min(520px, 100%); }
 .school-edit-form { margin-top: 20px; display: grid; gap: 10px; }
 .school-edit-form label { display: grid; gap: 7px; color: #4b5551; font-size: 10px; font-weight: 700; }
-.school-edit-form input { height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; outline: 0; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
-.school-edit-form input:focus { border-color: #9bb9d7; box-shadow: 0 0 0 3px rgba(171,202,233,.22); }
+.school-edit-form input, .school-edit-form select { height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #fff; font-size: 12px; }
+.school-edit-form input { font-family: var(--font-geist-mono), monospace; }
+.school-edit-form input:focus, .school-edit-form select:focus { border-color: #9bb9d7; box-shadow: 0 0 0 3px rgba(171,202,233,.22); }
+.new-status-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
 .school-edit-form > small { color: #7c8581; line-height: 1.5; font-size: 9px; }
 .school-edit-form .modal-actions { margin-top: 8px; }
 

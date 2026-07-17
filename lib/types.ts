@@ -1,10 +1,16 @@
 export type SchoolStatus = "Ready to order" | "In progress" | "Needs attention" | "Not started";
 export type SchoolType = "regular" | "chassidish";
+export type OutreachStatus = {
+  name: string;
+  isSystem: boolean;
+};
 
 export type School = {
   id: number;
   name: string;
   schoolType: SchoolType;
+  outreachStatus: string;
+  lastContactedAt: string;
   district: string;
   city: string;
   state: string;
