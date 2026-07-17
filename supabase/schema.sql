@@ -95,6 +95,11 @@ alter table public.schools
   check (school_type in ('regular', 'chassidish'));
 alter table public.schools add column if not exists outreach_status text;
 alter table public.schools add column if not exists last_contacted_at timestamptz;
+alter table public.schools add column if not exists last_message_direction text;
+alter table public.schools drop constraint if exists schools_last_message_direction_check;
+alter table public.schools
+  add constraint schools_last_message_direction_check
+  check (last_message_direction is null or last_message_direction in ('inbound', 'outbound'));
 
 create table if not exists public.school_outreach_statuses (
   name text primary key check (btrim(name) <> ''),
@@ -309,44 +314,43 @@ where contacted_at is null;
 alter table public.correspondence alter column contacted_at set default now();
 alter table public.correspondence alter column contacted_at set not null;
 
-create or replace function public.update_school_last_contacted_at()
+create or replace function public.update_school_communication_state()
 returns trigger
 language plpgsql
 as $$
+declare
+  latest_direction text;
 begin
+  select correspondence.direction
+  into latest_direction
+  from public.correspondence correspondence
+  where correspondence.school_id = new.school_id
+    and correspondence.channel = 'email'
+    and not (correspondence.direction = 'outbound' and correspondence.status in ('draft', 'failed'))
+  order by correspondence.contacted_at desc, correspondence.created_at desc
+  limit 1;
+
   update public.schools
-  set last_contacted_at = greatest(
-    coalesce(last_contacted_at, new.contacted_at),
-    new.contacted_at
-  )
+  set last_contacted_at = greatest(coalesce(last_contacted_at, new.contacted_at), new.contacted_at),
+      last_message_direction = latest_direction,
+      status = case
+        when latest_direction = 'inbound' then 'Needs attention'
+        when status = 'Complete' then status
+        when orders_2026 > 0 then 'In progress'
+        when lower(outreach_status) ~ '(sent|invite|interested|ready)' then 'Ready to order'
+        else 'Not started'
+      end
   where id = new.school_id;
   return new;
 end;
 $$;
 
 drop trigger if exists update_school_last_contacted_at on public.correspondence;
-create trigger update_school_last_contacted_at
-after insert on public.correspondence
-for each row execute function public.update_school_last_contacted_at();
-
-create or replace function public.flag_school_reply_needed()
-returns trigger
-language plpgsql
-as $$
-begin
-  if new.direction = 'inbound' then
-    update public.schools
-    set status = 'Needs attention'
-    where id = new.school_id;
-  end if;
-  return new;
-end;
-$$;
-
 drop trigger if exists flag_school_reply_needed on public.correspondence;
-create trigger flag_school_reply_needed
-after insert on public.correspondence
-for each row execute function public.flag_school_reply_needed();
+drop trigger if exists update_school_communication_state on public.correspondence;
+create trigger update_school_communication_state
+after insert or update of status on public.correspondence
+for each row execute function public.update_school_communication_state();
 
 update public.schools school
 set last_contacted_at = latest.contacted_at
@@ -355,11 +359,25 @@ from (
   from public.correspondence
   group by school_id
 ) latest
-where school.id = latest.school_id
-  and (
-    school.last_contacted_at is null
-    or school.last_contacted_at < latest.contacted_at
-  );
+where school.id = latest.school_id;
+
+update public.schools school
+set last_message_direction = latest.direction,
+    status = case
+      when latest.direction = 'inbound' then 'Needs attention'
+      when school.status = 'Complete' then school.status
+      when school.orders_2026 > 0 then 'In progress'
+      when lower(school.outreach_status) ~ '(sent|invite|interested|ready)' then 'Ready to order'
+      else 'Not started'
+    end
+from (
+  select distinct on (school_id) school_id, direction, contacted_at
+  from public.correspondence
+  where channel = 'email'
+    and not (direction = 'outbound' and status in ('draft', 'failed'))
+  order by school_id, contacted_at desc, created_at desc
+) latest
+where school.id = latest.school_id;
 
 create table if not exists public.gmail_connections (
   id uuid primary key default gen_random_uuid(),

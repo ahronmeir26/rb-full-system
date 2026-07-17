@@ -1,10 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/auth";
 import { mapSchool } from "@/lib/map-school";
+import { loadSchools } from "@/lib/school-data";
 import type { SchoolType } from "@/lib/types";
 
 const schoolTypes = new Set<SchoolType>(["regular", "chassidish"]);
 const avatarColors = ["mint", "blue", "peach", "violet", "gold", "rose"];
+
+export async function GET() {
+  const viewer = await getViewer();
+  if (!viewer) return Response.json({ error: "Authentication required." }, { status: 401 });
+  const result = await loadSchools();
+  return Response.json(result);
+}
 
 function cleanText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return "";

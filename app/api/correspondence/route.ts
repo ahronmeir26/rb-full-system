@@ -44,6 +44,40 @@ export async function POST(request: Request) {
   if (!viewer) return Response.json({ error: "Authentication required." }, { status: 401 });
 
   const body = await request.json().catch(() => null);
+  const noteSchoolId = Number(body?.noteSchoolId);
+  const note = typeof body?.note === "string" ? body.note.trim() : "";
+  if (Number.isInteger(noteSchoolId) && noteSchoolId > 0) {
+    if (!note || note.length > 20_000) {
+      return Response.json({ error: "A note of up to 20,000 characters is required." }, { status: 400 });
+    }
+
+    const supabase = serviceClient();
+    if (!supabase) return Response.json({ error: "Notes require a Supabase connection." }, { status: 503 });
+
+    const contactedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("correspondence")
+      .insert({
+        id: crypto.randomUUID(),
+        school_id: noteSchoolId,
+        direction: "outbound",
+        channel: "note",
+        subject: "Internal note",
+        body: note,
+        from_email: viewer.email,
+        status: "sent",
+        contacted_at: contactedAt,
+        created_by: viewer.id,
+      })
+      .select("id,direction,channel,subject,body,from_email,to_email,status,contacted_at")
+      .single();
+    if (error) {
+      console.error("Unable to save school note", error);
+      return Response.json({ error: "Unable to save the note." }, { status: 500 });
+    }
+    return Response.json({ note: data }, { status: 201 });
+  }
+
   const schoolIds = Array.isArray(body?.schoolIds)
     ? [...new Set(body.schoolIds.map(Number).filter((id: number) => Number.isInteger(id) && id > 0))]
     : [];

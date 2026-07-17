@@ -31,6 +31,11 @@ export function mapSchool(row: SchoolRow, index = 0): School {
     schoolType: schoolTypes.has(rawSchoolType) ? rawSchoolType : "regular",
     outreachStatus: String(row.outreachStatus ?? row.outreach_status ?? "Not contacted"),
     lastContactedAt: String(row.lastContactedAt ?? row.last_contacted_at ?? ""),
+    lastMessageDirection: row.lastMessageDirection === "inbound" || row.last_message_direction === "inbound"
+      ? "inbound"
+      : row.lastMessageDirection === "outbound" || row.last_message_direction === "outbound"
+        ? "outbound"
+        : "",
     district: String(row.district ?? ""),
     city: String(row.city ?? ""),
     state: String(row.state ?? ""),

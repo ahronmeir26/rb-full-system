@@ -42,6 +42,7 @@ export type School = {
   schoolType: SchoolType;
   outreachStatus: string;
   lastContactedAt: string;
+  lastMessageDirection: "inbound" | "outbound" | "";
   district: string;
   city: string;
   state: string;
