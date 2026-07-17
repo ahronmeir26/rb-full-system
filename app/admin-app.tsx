@@ -259,7 +259,11 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
     const result = await response.json().catch(() => null);
     setLoading(false);
     if (!response.ok) {
-      setError(result?.error || "Unable to record the email.");
+      setError(result?.error || "Unable to send the email.");
+      return;
+    }
+    if (result?.failed) {
+      setError(`${result.queued} email${result.queued === 1 ? "" : "s"} queued, but ${result.failed} failed.`);
       return;
     }
     onSent();
@@ -277,7 +281,7 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
         {error && <div className="login-error" role="alert">{error}</div>}
         <div className="modal-actions">
           <button className="secondary-button" onClick={onClose}>Save draft</button>
-          <button className="primary-button" onClick={send} disabled={!school.email || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Recording…" : "Send email"}</button>
+          <button className="primary-button" onClick={send} disabled={!school.email || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Sending…" : "Send email"}</button>
         </div>
       </div>
     </div>

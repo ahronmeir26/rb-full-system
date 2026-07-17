@@ -211,7 +211,8 @@ test("supports custom outreach statuses and complete contact history", async () 
   assert.match(schema, /update_school_last_contacted_at/);
   assert.match(editor, /Create a custom status/);
   assert.match(editor, /Complete history/);
-  assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\)/);
+  assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\.map\(\(row\) => row\.correspondence\)\)/);
+  assert.match(correspondenceRoute, /queueKlaviyoOutgoingEmail/);
   assert.match(statusRoute, /\.from\("school_outreach_statuses"\)/);
 });
 

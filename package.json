@@ -11,7 +11,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "build:gcloud": "CLOUD_RUN_BUILD=1 next build --webpack",
     "start:gcloud": "node .next/standalone/server.js",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:schema": "node --env-file=.env.local scripts/apply_supabase_schema.mjs",

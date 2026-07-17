@@ -92,6 +92,12 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm test`: build the starter and verify its rendered loading skeleton
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
+## Klaviyo outgoing email
+
+Admin-composed email is queued through a Klaviyo custom event and delivered by
+a metric-triggered Klaviyo flow. See [docs/klaviyo-setup.md](docs/klaviyo-setup.md)
+for the API-key scope, environment variables, and required flow configuration.
+
 ## Shopify setup
 
 This project uses a new Dev Dashboard app and Shopify's client credentials

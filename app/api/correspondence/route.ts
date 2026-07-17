@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/auth";
+import {
+  klaviyoConfigFromEnvironment,
+  klaviyoConfigured,
+  queueKlaviyoOutgoingEmail,
+  type KlaviyoOutgoingEmail,
+} from "@/lib/klaviyo";
 
 function serviceClient() {
   const url = process.env.SUPABASE_URL;
@@ -50,12 +56,17 @@ export async function POST(request: Request) {
     return Response.json({ error: "A subject and message are required." }, { status: 400 });
   }
 
+  const klaviyoConfig = klaviyoConfigFromEnvironment();
+  if (!klaviyoConfigured(klaviyoConfig)) {
+    return Response.json({ error: "Outgoing email requires a configured Klaviyo private API key." }, { status: 503 });
+  }
+
   const supabase = serviceClient();
   if (!supabase) return Response.json({ error: "Correspondence requires a Supabase connection." }, { status: 503 });
 
   const { data: schools, error: schoolError } = await supabase
     .from("schools")
-    .select("id,email")
+    .select("id,name,email")
     .in("id", schoolIds);
   if (schoolError) {
     console.error("Unable to load correspondence recipients", schoolError);
@@ -65,26 +76,73 @@ export async function POST(request: Request) {
   const contactedAt = new Date().toISOString();
   const rows = (schools ?? [])
     .filter((school) => school.email?.includes("@"))
-    .map((school) => ({
-      school_id: school.id,
-      direction: "outbound",
-      channel: "email",
-      subject,
-      body: message,
-      from_email: viewer.email,
-      to_email: school.email,
-      status: "sent",
-      contacted_at: contactedAt,
-      sent_at: contactedAt,
-      created_by: viewer.id,
-    }));
+    .map((school) => {
+      const eventId = crypto.randomUUID();
+      return {
+        correspondence: {
+          id: crypto.randomUUID(),
+          school_id: school.id,
+          direction: "outbound",
+          channel: "email",
+          subject,
+          body: message,
+          from_email: viewer.email,
+          to_email: school.email,
+          status: "queued",
+          external_message_id: eventId,
+          contacted_at: contactedAt,
+          sent_at: null,
+          created_by: viewer.id,
+        },
+        klaviyo: {
+          eventId,
+          toEmail: school.email,
+          subject,
+          message,
+          senderEmail: viewer.email,
+          senderName: viewer.displayName,
+          schoolId: Number(school.id),
+          schoolName: school.name,
+        } satisfies KlaviyoOutgoingEmail,
+      };
+    });
   if (!rows.length) return Response.json({ error: "No selected schools have an email address." }, { status: 400 });
 
-  const { error } = await supabase.from("correspondence").insert(rows);
+  const { error } = await supabase.from("correspondence").insert(rows.map((row) => row.correspondence));
   if (error) {
     console.error("Unable to record correspondence", error);
     return Response.json({ error: "Unable to record correspondence." }, { status: 500 });
   }
 
-  return Response.json({ recorded: rows.length, contactedAt }, { status: 201 });
+  const results: Array<{ id: string; accepted: boolean; error?: unknown }> = [];
+  for (let index = 0; index < rows.length; index += 25) {
+    const batch = rows.slice(index, index + 25);
+    results.push(...await Promise.all(batch.map(async (row) => {
+      try {
+        await queueKlaviyoOutgoingEmail(row.klaviyo, klaviyoConfig);
+        return { id: row.correspondence.id, accepted: true };
+      } catch (error) {
+        console.error("Unable to queue Klaviyo email event", row.klaviyo.eventId, error);
+        return { id: row.correspondence.id, accepted: false, error };
+      }
+    })));
+  }
+
+  const failedIds = results.filter((result) => !result.accepted).map((result) => result.id);
+  if (failedIds.length) {
+    const { error: updateError } = await supabase
+      .from("correspondence")
+      .update({ status: "failed" })
+      .in("id", failedIds);
+    if (updateError) console.error("Unable to mark failed Klaviyo correspondence", updateError);
+  }
+
+  const queued = results.length - failedIds.length;
+  if (!queued) {
+    return Response.json({ error: "Klaviyo could not queue the email.", queued: 0, failed: failedIds.length }, { status: 502 });
+  }
+  return Response.json(
+    { queued, failed: failedIds.length, contactedAt },
+    { status: failedIds.length ? 207 : 202 },
+  );
 }
