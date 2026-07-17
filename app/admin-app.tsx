@@ -11,6 +11,7 @@ import {
   Clock3,
   Download,
   Flag,
+  LayoutDashboard,
   LogOut,
   Mail,
   MessageCircle,
@@ -942,12 +943,15 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   }
 
   return <div className="app-shell">
-    <div className="main-shell">
-      <header className="topbar">
+      <aside className="topbar">
         <Logo />
-        <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
+        <nav className="workspace-nav" aria-label="Workspace">
+          <button className={section === "overview" ? "active" : ""} onClick={() => { setSection("overview"); returnToSchoolList(); }}><LayoutDashboard size={17} /><span>Overview</span></button>
+          <button className={section === "discounts" ? "active" : ""} onClick={() => { if (section !== "discounts") toggleDiscounts(); }}><BadgePercent size={17} /><span>Discounts</span></button>
+        </nav>
+        <div className="nav-section-label">Find anything</div>
+        <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
         <div className="topbar-actions">
-          <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={toggleDiscounts}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
           <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
           <div className="topbar-account">
             <span className="user-avatar">{viewer.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
@@ -955,8 +959,9 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
             <button className="icon-button" onClick={signOut} aria-label="Sign out" title="Sign out"><LogOut size={17} /></button>
           </div>
         </div>
-      </header>
+      </aside>
 
+    <div className="main-shell">
       {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected(updated); }} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>

@@ -27,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Appreciation Initiative — Program Operations",
       description: "Program operations, connected.",
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1440, height: 1440, alt: "A.I.STONE Appreciation Initiative" }],
+      images: [{ url: `${origin}/og.png`, width: 1200, height: 630, alt: "A.I.STONE Appreciation Initiative program operations" }],
     },
     twitter: {
       card: "summary_large_image",
