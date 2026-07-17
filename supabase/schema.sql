@@ -266,8 +266,7 @@ create table if not exists public.correspondence (
 create index if not exists correspondence_school_created_idx
   on public.correspondence (school_id, created_at desc);
 create unique index if not exists correspondence_school_external_message_idx
-  on public.correspondence (school_id, external_message_id)
-  where external_message_id is not null;
+  on public.correspondence (school_id, external_message_id);
 
 alter table public.correspondence add column if not exists contacted_at timestamptz;
 update public.correspondence
