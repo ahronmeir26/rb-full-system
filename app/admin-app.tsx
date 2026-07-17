@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Settings,
@@ -78,6 +79,18 @@ type CorrespondenceRecord = {
   to_email: string | null;
   status: string;
   contacted_at: string;
+};
+
+type GmailStatus = {
+  configured: boolean;
+  connected: boolean;
+  connection?: {
+    gmail_email: string;
+    status: "connected" | "syncing" | "error";
+    messages_synced: number;
+    last_synced_at: string | null;
+    last_sync_error: string | null;
+  } | null;
 };
 
 type NewSchoolFields = {
@@ -342,12 +355,61 @@ function Correspondence({ school, refreshVersion, onEmail }: { school: School; r
   </section>;
 }
 
-function SettingsModal({ email, onClose }: { email: string; onClose: () => void }) {
+function SettingsModal({ email, onClose, onCorrespondenceChanged }: {
+  email: string;
+  onClose: () => void;
+  onCorrespondenceChanged: () => void;
+}) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [gmailMessage, setGmailMessage] = useState("");
+
+  async function loadGmailStatus() {
+    const response = await fetch("/api/gmail/status");
+    const result = await response.json().catch(() => null);
+    if (response.ok) setGmailStatus(result);
+  }
+
+  useEffect(() => {
+    loadGmailStatus().catch(() => undefined);
+  }, []);
+
+  async function syncGmail() {
+    setGmailLoading(true);
+    setGmailMessage("");
+    const response = await fetch("/api/gmail/sync", { method: "POST" });
+    const result = await response.json().catch(() => null);
+    setGmailLoading(false);
+    if (!response.ok) {
+      setGmailMessage(result?.error || "Unable to sync Gmail.");
+      await loadGmailStatus();
+      return;
+    }
+    setGmailMessage(result.skipped
+      ? "A Gmail sync is already in progress."
+      : `Gmail is up to date${result.imported ? ` · ${result.imported} new email${result.imported === 1 ? "" : "s"}` : ""}.`);
+    if (result.imported) onCorrespondenceChanged();
+    await loadGmailStatus();
+  }
+
+  async function disconnectGmail() {
+    setGmailLoading(true);
+    setGmailMessage("");
+    const response = await fetch("/api/gmail/disconnect", { method: "POST" });
+    const result = await response.json().catch(() => null);
+    setGmailLoading(false);
+    if (!response.ok) {
+      setGmailMessage(result?.error || "Unable to disconnect Gmail.");
+      return;
+    }
+    setGmailMessage("Gmail disconnected. Previously imported emails remain in each school timeline.");
+    await loadGmailStatus();
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -376,8 +438,30 @@ function SettingsModal({ email, onClose }: { email: string; onClose: () => void 
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
     <div className="modal settings-modal" role="dialog" aria-modal="true" aria-label="Account settings" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="modal-head"><div><p className="eyebrow">Account settings</p><h2>Security</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
+      <div className="modal-head"><div><p className="eyebrow">Account settings</p><h2>Settings</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
       <div className="settings-email"><span>Signed in as</span><strong>{email}</strong></div>
+      <section className="gmail-settings" aria-labelledby="gmail-settings-title">
+        <div className="settings-section-heading">
+          <div><h3 id="gmail-settings-title">Gmail sync</h3><p>Pull school conversations into the matching school timeline every 10 minutes.</p></div>
+          {gmailStatus?.connected && <span className="gmail-connected-dot">Connected</span>}
+        </div>
+        {!gmailStatus ? <div className="gmail-status-line"><RefreshCw className="spin" size={16} /> Checking Gmail…</div>
+          : !gmailStatus.configured ? <div className="gmail-setup-note">Gmail setup is not enabled for this site yet.</div>
+            : gmailStatus.connected && gmailStatus.connection ? <>
+              <div className="gmail-account">
+                <span className="gmail-icon"><Mail size={18} /></span>
+                <div><strong>{gmailStatus.connection.gmail_email}</strong><small>{gmailStatus.connection.last_synced_at ? `Last synced ${new Date(gmailStatus.connection.last_synced_at).toLocaleString()}` : "Ready for the first sync"} · {gmailStatus.connection.messages_synced.toLocaleString()} emails imported</small></div>
+              </div>
+              {gmailStatus.connection.last_sync_error && <div className="login-error" role="alert">{gmailStatus.connection.last_sync_error}</div>}
+              <div className="gmail-actions"><button type="button" className="secondary-button" disabled={gmailLoading} onClick={disconnectGmail}>Disconnect</button><button type="button" className="primary-button" disabled={gmailLoading} onClick={syncGmail}><RefreshCw className={gmailLoading ? "spin" : ""} size={15} /> {gmailLoading ? "Syncing…" : "Sync now"}</button></div>
+            </> : <>
+              <p className="gmail-explainer">Connect the Gmail account you use with schools. Access is read-only, and you can disconnect it at any time.</p>
+              <button type="button" className="primary-button gmail-connect-button" onClick={() => window.location.assign("/api/gmail/connect")}><Mail size={16} /> Connect Gmail</button>
+            </>}
+        {gmailMessage && <div className={gmailMessage.startsWith("Unable") ? "login-error" : "settings-success"} role="status">{gmailMessage}</div>}
+      </section>
+      <div className="settings-divider" />
+      <div className="settings-section-heading security-heading"><div><h3>Security</h3><p>Change the password for this admin account.</p></div></div>
       <form className="settings-form" onSubmit={submit}>
         <label>Current password<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label>
         <label>New password<input type="password" autoComplete="new-password" minLength={10} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label>
@@ -401,6 +485,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [section, setSection] = useState<"overview" | "discounts">("overview");
   const [sent, setSent] = useState(false);
   const [correspondenceVersion, setCorrespondenceVersion] = useState(0);
+  const [gmailNotice, setGmailNotice] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [visibleCount, setVisibleCount] = useState(30);
@@ -408,6 +493,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const schoolsSectionRef = useRef<HTMLElement>(null);
   const returningSchoolIdRef = useRef<number | null>(null);
   const selectedSchoolIdRef = useRef<number | null>(null);
+  const gmailSyncingRef = useRef(false);
 
   const filtered = useMemo(() => schools.filter((school) => {
     const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.code}`.toLowerCase().includes(search.toLowerCase());
@@ -441,6 +527,48 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   useEffect(() => {
     selectedSchoolIdRef.current = selected?.id ?? null;
   }, [selected]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get("gmail");
+    if (!result) return;
+    setGmailNotice(result === "connected"
+      ? "Gmail connected. Your first school email sync is starting now."
+      : result === "setup-required"
+        ? "Gmail needs one-time setup before it can be connected."
+        : result === "cancelled"
+          ? "Gmail connection was cancelled."
+          : "Gmail could not be connected. Please try again.");
+    url.searchParams.delete("gmail");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function syncGmailInBackground() {
+      if (gmailSyncingRef.current) return;
+      gmailSyncingRef.current = true;
+      try {
+        const statusResponse = await fetch("/api/gmail/status");
+        const status = await statusResponse.json().catch(() => null);
+        if (!active || !statusResponse.ok || !status?.connected) return;
+        const response = await fetch("/api/gmail/sync", { method: "POST" });
+        const result = await response.json().catch(() => null);
+        if (active && response.ok && result?.imported) {
+          setCorrespondenceVersion((version) => version + 1);
+        }
+      } finally {
+        gmailSyncingRef.current = false;
+      }
+    }
+    const initialTimer = window.setTimeout(syncGmailInBackground, 1500);
+    const interval = window.setInterval(syncGmailInBackground, 5 * 60_000);
+    return () => {
+      active = false;
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     function selectSchoolFromLocation() {
@@ -552,6 +680,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
+        {gmailNotice && <div className="success-banner dismissible"><Mail size={18} /><div><strong>Gmail</strong><span>{gmailNotice}</span></div><button onClick={() => setGmailNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
 
         <section ref={schoolsSectionRef} className="schools-section">
           <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Communication:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by communication status" value={filter} onChange={(e) => { setFilter(e.target.value); setVisibleCount(30); }}><option>All</option>{outreachStatuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><ChevronDown size={14} /></label></div></div>
@@ -562,7 +691,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     </div>
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
-    {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}
+    {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} />}
     {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(code, outreachStatus) => saveSchool(editSchool, code, outreachStatus)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
   </div>;
 }

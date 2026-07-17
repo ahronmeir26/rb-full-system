@@ -265,6 +265,9 @@ create table if not exists public.correspondence (
 
 create index if not exists correspondence_school_created_idx
   on public.correspondence (school_id, created_at desc);
+create unique index if not exists correspondence_school_external_message_idx
+  on public.correspondence (school_id, external_message_id)
+  where external_message_id is not null;
 
 alter table public.correspondence add column if not exists contacted_at timestamptz;
 update public.correspondence
@@ -305,6 +308,54 @@ where school.id = latest.school_id
     school.last_contacted_at is null
     or school.last_contacted_at < latest.contacted_at
   );
+
+create table if not exists public.gmail_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  gmail_email text not null,
+  encrypted_refresh_token text not null,
+  history_id text,
+  initial_sync_complete boolean not null default false,
+  status text not null default 'connected'
+    check (status in ('connected', 'syncing', 'error')),
+  messages_synced integer not null default 0 check (messages_synced >= 0),
+  last_synced_at timestamptz,
+  last_sync_started_at timestamptz,
+  last_sync_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
+);
+
+create unique index if not exists gmail_connections_email_idx
+  on public.gmail_connections (lower(gmail_email));
+create index if not exists gmail_connections_sync_idx
+  on public.gmail_connections (status, last_synced_at);
+
+create or replace function public.complete_gmail_sync(
+  connection_id uuid,
+  imported_count integer,
+  latest_history_id text,
+  completed_at timestamptz
+)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.gmail_connections
+  set status = 'connected',
+      initial_sync_complete = true,
+      history_id = latest_history_id,
+      messages_synced = messages_synced + greatest(imported_count, 0),
+      last_synced_at = completed_at,
+      last_sync_error = null
+  where id = connection_id;
+$$;
+revoke execute on function public.complete_gmail_sync(uuid, integer, text, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.complete_gmail_sync(uuid, integer, text, timestamptz)
+  to service_role;
 
 create table if not exists public.invitation_campaigns (
   id uuid primary key default gen_random_uuid(),
@@ -455,7 +506,7 @@ begin
     'schools', 'user_profiles', 'school_contacts', 'school_programs',
     'school_year_stats', 'school_outreach_statuses',
     'school_outreach_status_history', 'form_templates', 'form_submissions',
-    'correspondence', 'invitation_campaigns', 'invitation_recipients',
+    'correspondence', 'gmail_connections', 'invitation_campaigns', 'invitation_recipients',
     'discount_programs', 'discount_school_codes', 'order_submissions'
   ]
   loop
@@ -478,6 +529,7 @@ comment on table public.discount_programs is 'Shared Shopify discount configurat
 comment on table public.discount_school_codes is 'Per-school redeem-code synchronization state for a yearly Shopify discount.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';
+comment on table public.gmail_connections is 'Encrypted read-only Gmail connections and incremental synchronization state.';
 
 grant usage on schema public to service_role;
 grant select, insert, update, delete on all tables in schema public to service_role;

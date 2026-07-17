@@ -436,10 +436,27 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .school-year-row > strong small { color: #737d79; font-size: 10px; font-weight: 600; letter-spacing: 0; }
 .school-year-row code { max-width: 135px; overflow: hidden; color: #616d68; font-family: var(--font-geist-mono), monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 
-.settings-modal { width: min(500px, 100%); }
+.settings-modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
 .settings-email { margin: 18px 0; padding: 12px 14px; border-radius: 8px; display: grid; gap: 3px; background: #f4f1ef; }
 .settings-email span { color: #7b8581; font-size: 9px; }
 .settings-email strong { font-size: 11px; overflow-wrap: anywhere; }
+.settings-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.settings-section-heading h3 { margin: 0; color: #333b38; font-size: 14px; }
+.settings-section-heading p { margin: 4px 0 0; color: #77817d; line-height: 1.5; font-size: 10px; }
+.gmail-connected-dot { padding: 5px 8px; border-radius: 999px; color: #2f5a48; background: #dfeee6; font-size: 9px; font-weight: 760; }
+.gmail-status-line { min-height: 72px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #717c77; font-size: 10px; }
+.gmail-setup-note, .gmail-explainer { margin: 13px 0 0; padding: 11px 12px; border: 1px solid #e2d5cc; border-radius: 8px; color: #705241; background: #faf4ef; line-height: 1.5; font-size: 10px; }
+.gmail-explainer { border: 0; padding: 0; color: #6f7975; background: transparent; }
+.gmail-connect-button { margin-top: 13px; }
+.gmail-account { margin-top: 13px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; display: flex; align-items: center; gap: 11px; background: #fafbfa; }
+.gmail-icon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 9px; display: grid; place-items: center; color: #40566a; background: #e4eef7; }
+.gmail-account > div { min-width: 0; display: grid; gap: 4px; }
+.gmail-account strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.gmail-account small { color: #74807b; font-size: 9px; line-height: 1.4; }
+.gmail-actions { margin-top: 11px; display: flex; justify-content: flex-end; gap: 8px; }
+.gmail-settings .settings-success, .gmail-settings .login-error { margin-top: 10px; }
+.settings-divider { height: 1px; margin: 20px 0; background: var(--line); }
+.security-heading { margin-bottom: 13px; }
 .settings-form { display: grid; gap: 14px; }
 .settings-form label { display: grid; gap: 6px; color: #4b5551; font-size: 10px; font-weight: 700; }
 .settings-form input { height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; outline: 0; }
