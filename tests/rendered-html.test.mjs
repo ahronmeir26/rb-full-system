@@ -74,6 +74,25 @@ test("database schema covers the complete school-program workflow", async () => 
   assert.match(importer, /program_year: 2024/);
 });
 
+test("2026 coupon codes start blank and remain admin-editable", async () => {
+  const [seed, workbookImporter, supabaseSync, editor, updateRoute] = await Promise.all([
+    readFile(new URL("../app/school-data.generated.json", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/import_school_workbook.py", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/sync_schools_to_supabase.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/schools/[schoolId]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  const schools = JSON.parse(seed);
+  assert.ok(schools.length > 0);
+  assert.ok(schools.every((school) => school.code === ""));
+  assert.match(workbookImporter, /"code": ""/);
+  assert.doesNotMatch(supabaseSync, /^\s+code: school\.code/m);
+  assert.match(editor, /2026 coupon code/);
+  assert.match(editor, /Edit school/);
+  assert.match(updateRoute, /\.update\(\{ code: storedCode \}\)/);
+});
+
 test("generates a four-page appreciation order form for a school's coupon code", async () => {
   const template = await readFile(new URL("../assets/forms/ai-stone-appreciation-order-form-template.pdf", import.meta.url));
   const customized = await customizeAppreciationOrderForm(template, "PESACH26-TEST");

@@ -15,7 +15,6 @@ const rows = schools.map((school) => ({
   district: school.district || null,
   city: school.city || null,
   state: school.state || null,
-  code: school.code || null,
   code_2025: school.code2025 || null,
   code_2024: school.code2024 || null,
   admin: school.admin || null,
@@ -53,7 +52,6 @@ const contacts = rows
 const schoolPrograms = rows.map((school) => ({
   school_id: school.id,
   program_year: 2026,
-  school_code: school.code || null,
   eligible: true,
   eligibility_note: school.eligibility || null,
   status: school.status,
@@ -61,7 +59,7 @@ const schoolPrograms = rows.map((school) => ({
 }));
 
 const yearlyStats = rows.flatMap((school) => [
-  { school_id: school.id, program_year: 2026, school_code: school.code || null, order_count: school.orders_2026 },
+  { school_id: school.id, program_year: 2026, order_count: school.orders_2026 },
   { school_id: school.id, program_year: 2025, school_code: school.code_2025 || null, order_count: school.orders_2025 },
   { school_id: school.id, program_year: 2024, school_code: school.code_2024 || null, order_count: school.orders_2024 },
 ]);

@@ -13,6 +13,7 @@ import {
   LogOut,
   Mail,
   MessageCircle,
+  Pencil,
   Search,
   Send,
   Settings,
@@ -58,6 +59,42 @@ function OrderFormDownload({ school, className = "secondary-button" }: { school:
   }
 
   return <a className={`${className} download-link`} href={`/api/forms/appreciation-order?schoolId=${school.id}`} download><Download size={16} /> Download order form</a>;
+}
+
+function EditSchoolModal({ school, onClose, onSaved }: { school: School; onClose: () => void; onSaved: (code: string) => void }) {
+  const [code, setCode] = useState(school.code);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    const response = await fetch(`/api/schools/${school.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) {
+      setMessage(result?.error || "Unable to save the school.");
+      return;
+    }
+    onSaved(result.code);
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="modal edit-school-modal" role="dialog" aria-modal="true" aria-label={`Edit ${school.name}`} onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><p className="eyebrow">School settings</p><h2>Edit {school.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
+      <form className="school-edit-form" onSubmit={submit}>
+        <label><span>2026 coupon code</span><input value={code} onChange={(event) => setCode(event.target.value)} maxLength={64} autoFocus placeholder="Enter a coupon code" /></label>
+        <small>This code is printed on the school&apos;s downloadable order form. Leave it blank to remove the code.</small>
+        {message && <div className="login-error" role="alert">{message}</div>}
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading}>{loading ? "Saving…" : "Save school"}</button></div>
+      </form>
+    </div>
+  </div>;
 }
 
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
@@ -106,13 +143,13 @@ function BulkEmailModal({ recipientCount, onClose, onSent }: { recipientCount: n
   );
 }
 
-function SchoolDetail({ school, onBack, onEmail }: { school: School; onBack: () => void; onEmail: () => void }) {
+function SchoolDetail({ school, onBack, onEmail, onEdit }: { school: School; onBack: () => void; onEmail: () => void; onEdit: () => void }) {
   return (
     <main className="content detail-content">
       <button className="back-link" onClick={onBack}><ArrowLeft size={16} /> All schools</button>
       <div className="detail-hero">
         <div className="detail-title"><Avatar school={school} /><div><div className="title-line"><h1>{school.name}</h1><span className={`status ${statusClass(school.status)}`}>{school.status}</span></div><p>{[school.district, [school.city, school.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Location not provided"} · <span className="code">{school.code || "2026 code not assigned"}</span></p></div></div>
-        <div className="detail-actions"><OrderFormDownload school={school} /><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={16} /> Email administrator</button></div>
+        <div className="detail-actions"><button className="secondary-button" onClick={onEdit}><Pencil size={16} /> Edit school</button><OrderFormDownload school={school} /><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={16} /> Email administrator</button></div>
       </div>
       <div className="school-correspondence-layout">
         <Correspondence school={school} onEmail={onEmail} />
@@ -185,8 +222,9 @@ function SettingsModal({ email, onClose }: { email: string; onClose: () => void 
 }
 
 export function AdminApp({ initialSchools, dataSource, viewer }: { initialSchools: School[]; dataSource: "supabase" | "workbook"; viewer: Viewer }) {
-  const schools = initialSchools;
+  const [schools, setSchools] = useState(initialSchools);
   const [selected, setSelected] = useState<School | null>(null);
+  const [editSchool, setEditSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -239,6 +277,13 @@ export function AdminApp({ initialSchools, dataSource, viewer }: { initialSchool
     window.location.reload();
   }
 
+  function saveSchoolCode(school: School, code: string) {
+    const updated = { ...school, code };
+    setSchools((current) => current.map((item) => item.id === school.id ? updated : item));
+    setSelected((current) => current?.id === school.id ? updated : current);
+    setEditSchool(null);
+  }
+
   return <div className="app-shell">
     <div className="main-shell">
       <header className="topbar">
@@ -254,7 +299,7 @@ export function AdminApp({ initialSchools, dataSource, viewer }: { initialSchool
         </div>
       </header>
 
-      {selected ? <SchoolDetail school={selected} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} /> : <main className="content">
+      {selected ? <SchoolDetail school={selected} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
         <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Email every school</button></div></div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
@@ -280,5 +325,6 @@ export function AdminApp({ initialSchools, dataSource, viewer }: { initialSchool
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { setEmailSchool(null); setSent(true); }} />}
     {bulkEmailOpen && <BulkEmailModal recipientCount={recipientCount} onClose={() => setBulkEmailOpen(false)} onSent={() => { setBulkEmailOpen(false); setSent(true); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}
+    {editSchool && <EditSchoolModal school={editSchool} onClose={() => setEditSchool(null)} onSaved={(code) => saveSchoolCode(editSchool, code)} />}
   </div>;
 }

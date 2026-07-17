@@ -117,7 +117,9 @@ def main():
             "district": "",
             "city": city,
             "state": state,
-            "code": code25,
+            # The current-year coupon code is assigned manually in the admin app.
+            # Do not carry the prior year's code into the 2026 program.
+            "code": "",
             "code2025": code25,
             "code2024": code24,
             "admin": match.get("admin", ""),

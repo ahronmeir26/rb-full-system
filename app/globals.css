@@ -336,6 +336,14 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .settings-form .primary-button { justify-self: end; }
 .settings-success { padding: 10px 12px; border: 1px solid #afc9e1; border-radius: 8px; color: #2a4b63; background: #e7f0f8; font-size: 10px; }
 
+.edit-school-modal { width: min(520px, 100%); }
+.school-edit-form { margin-top: 20px; display: grid; gap: 10px; }
+.school-edit-form label { display: grid; gap: 7px; color: #4b5551; font-size: 10px; font-weight: 700; }
+.school-edit-form input { height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; outline: 0; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.school-edit-form input:focus { border-color: #9bb9d7; box-shadow: 0 0 0 3px rgba(171,202,233,.22); }
+.school-edit-form > small { color: #7c8581; line-height: 1.5; font-size: 9px; }
+.school-edit-form .modal-actions { margin-top: 8px; }
+
 @media (max-width: 880px) {
   .school-correspondence-layout { grid-template-columns: 1fr; }
   .school-data-panel { grid-row: 1; }
