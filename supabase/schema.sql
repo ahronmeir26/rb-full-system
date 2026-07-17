@@ -48,6 +48,40 @@ create unique index if not exists schools_2026_code_idx
 create index if not exists schools_status_idx on public.schools (status);
 create index if not exists schools_email_idx on public.schools (lower(email));
 
+create or replace function public.sync_schools_id_sequence()
+returns bigint
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  sequence_name text;
+  sequence_value bigint;
+  sequence_called boolean;
+  maximum_id bigint;
+begin
+  sequence_name := pg_catalog.pg_get_serial_sequence('public.schools', 'id');
+  if sequence_name is null then
+    raise exception 'public.schools.id does not have an identity sequence';
+  end if;
+
+  select coalesce(max(id), 0) into maximum_id from public.schools;
+  execute pg_catalog.format('select last_value, is_called from %s', sequence_name)
+    into sequence_value, sequence_called;
+  perform pg_catalog.setval(
+    sequence_name::regclass,
+    greatest(maximum_id, sequence_value, 1),
+    maximum_id > 0 or sequence_called
+  );
+  return maximum_id;
+end;
+$$;
+
+revoke all on function public.sync_schools_id_sequence() from public;
+grant execute on function public.sync_schools_id_sequence() to service_role;
+
+select public.sync_schools_id_sequence();
+
 alter table public.schools alter column district drop not null;
 alter table public.schools alter column district drop default;
 alter table public.schools alter column code drop not null;

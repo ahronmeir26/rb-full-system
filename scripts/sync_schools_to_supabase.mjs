@@ -38,6 +38,11 @@ for (let index = 0; index < rows.length; index += 100) {
   if (error) throw error;
 }
 
+// Explicit IDs do not advance PostgreSQL's identity sequence. Keep the next
+// admin-created school above the highest imported workbook ID.
+const { error: sequenceError } = await supabase.rpc("sync_schools_id_sequence");
+if (sequenceError) throw sequenceError;
+
 const contacts = rows
   .filter((school) => school.email?.includes("@"))
   .map((school) => ({

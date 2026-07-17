@@ -77,6 +77,9 @@ test("database schema covers the complete school-program workflow", async () => 
   assert.match(schema, /check \(role = 'admin'\)/);
   assert.match(loader, /from\("schools"\)\.select\("\*"\)/);
   assert.match(importer, /school_type: school\.schoolType \|\| "regular"/);
+  assert.match(schema, /create or replace function public\.sync_schools_id_sequence\(\)/);
+  assert.match(schema, /pg_catalog\.setval\([\s\S]*sequence_name::regclass/);
+  assert.match(importer, /rpc\("sync_schools_id_sequence"\)/);
   assert.match(importer, /program_year: 2026/);
   assert.match(importer, /program_year: 2025/);
   assert.match(importer, /program_year: 2024/);
