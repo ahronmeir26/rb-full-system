@@ -44,6 +44,7 @@ function mapSchool(row: SchoolRow, index: number): School {
 }
 
 const defaultOutreachStatuses: OutreachStatus[] = [
+  { name: "Not contacted", isSystem: true },
   { name: "Sent invite", isSystem: true },
   { name: "Not interested", isSystem: true },
   { name: "Interested", isSystem: true },

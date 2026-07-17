@@ -155,7 +155,7 @@ test("supports custom outreach statuses and complete contact history", async () 
     readFile(new URL("../app/api/outreach-statuses/route.ts", import.meta.url), "utf8"),
   ]);
 
-  for (const status of ["Sent invite", "Not interested", "Interested", "Sent"]) {
+  for (const status of ["Not contacted", "Sent invite", "Not interested", "Interested", "Sent"]) {
     assert.match(schema, new RegExp(`'${status}'`));
   }
   assert.match(schema, /foreign key \(outreach_status\) references public\.school_outreach_statuses\(name\)/);
@@ -166,6 +166,25 @@ test("supports custom outreach statuses and complete contact history", async () 
   assert.match(editor, /Complete history/);
   assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\)/);
   assert.match(statusRoute, /\.from\("school_outreach_statuses"\)/);
+});
+
+test("keeps pre-engagement outreach separate and hides program status from the school table", async () => {
+  const [schema, editor] = await Promise.all([
+    readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /\('Not contacted', true, 0\)/);
+  assert.match(schema, /outreach_status set default 'Not contacted'/);
+  assert.doesNotMatch(editor, /<th>Program status<\/th>/);
+});
+
+test("school details participate in browser back and forward navigation", async () => {
+  const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
+  assert.match(editor, /history\.pushState/);
+  assert.match(editor, /addEventListener\("popstate"/);
+  assert.match(editor, /history\.back\(\)/);
+  assert.match(editor, /searchParams\.set\("school"/);
+  assert.match(editor, /returningSchoolIdRef/);
 });
 
 test("generates a four-page appreciation order form for a school's coupon code", async () => {

@@ -18,7 +18,7 @@ create table if not exists public.schools (
   state text,
   school_type text not null default 'regular'
     check (school_type in ('regular', 'chassidish')),
-  outreach_status text not null default 'Sent invite',
+  outreach_status text not null default 'Not contacted',
   last_contacted_at timestamptz,
   code text,
   code_2025 text,
@@ -76,6 +76,7 @@ create unique index if not exists school_outreach_statuses_name_idx
 
 insert into public.school_outreach_statuses (name, is_system, sort_order)
 values
+  ('Not contacted', true, 0),
   ('Sent invite', true, 10),
   ('Not interested', true, 20),
   ('Interested', true, 30),
@@ -84,8 +85,8 @@ on conflict (name) do update
 set is_system = excluded.is_system,
     sort_order = excluded.sort_order;
 
-update public.schools set outreach_status = 'Sent invite' where outreach_status is null;
-alter table public.schools alter column outreach_status set default 'Sent invite';
+update public.schools set outreach_status = 'Not contacted' where outreach_status is null;
+alter table public.schools alter column outreach_status set default 'Not contacted';
 alter table public.schools alter column outreach_status set not null;
 alter table public.schools drop constraint if exists schools_outreach_status_fkey;
 alter table public.schools

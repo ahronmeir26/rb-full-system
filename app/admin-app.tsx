@@ -344,6 +344,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const schoolsSectionRef = useRef<HTMLElement>(null);
   const returningSchoolIdRef = useRef<number | null>(null);
+  const selectedSchoolIdRef = useRef<number | null>(null);
 
   const filtered = useMemo(() => schools.filter((school) => {
     const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.code}`.toLowerCase().includes(search.toLowerCase());
@@ -373,6 +374,31 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     });
     return () => cancelAnimationFrame(frame);
   }, [selected]);
+
+  useEffect(() => {
+    selectedSchoolIdRef.current = selected?.id ?? null;
+  }, [selected]);
+
+  useEffect(() => {
+    function selectSchoolFromLocation() {
+      const schoolId = Number(new URL(window.location.href).searchParams.get("school"));
+      const school = Number.isInteger(schoolId) ? schools.find((item) => item.id === schoolId) : undefined;
+      const previousSchoolId = selectedSchoolIdRef.current;
+      if (school) {
+        selectedSchoolIdRef.current = school.id;
+        setSection("overview");
+        setSelected(school);
+        return;
+      }
+      if (previousSchoolId !== null) returningSchoolIdRef.current = previousSchoolId;
+      selectedSchoolIdRef.current = null;
+      setSelected(null);
+    }
+
+    selectSchoolFromLocation();
+    window.addEventListener("popstate", selectSchoolFromLocation);
+    return () => window.removeEventListener("popstate", selectSchoolFromLocation);
+  }, [schools]);
   const totals = useMemo(() => schools.reduce((sum, school) => ({
     orders2026: sum.orders2026 + school.orders2026,
     orders2025: sum.orders2025 + school.orders2025,
@@ -394,13 +420,46 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     setEditSchool(null);
   }
 
+  function openSchool(school: School) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("school", String(school.id));
+    window.history.pushState({ ...window.history.state, schoolView: true }, "", `${url.pathname}${url.search}${url.hash}`);
+    selectedSchoolIdRef.current = school.id;
+    setSection("overview");
+    setSelected(school);
+  }
+
+  function returnToSchoolList() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("school") && window.history.state?.schoolView) {
+      window.history.back();
+      return;
+    }
+    if (selectedSchoolIdRef.current !== null) returningSchoolIdRef.current = selectedSchoolIdRef.current;
+    url.searchParams.delete("school");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    selectedSchoolIdRef.current = null;
+    setSelected(null);
+  }
+
+  function toggleDiscounts() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("school")) {
+      url.searchParams.delete("school");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    selectedSchoolIdRef.current = null;
+    setSelected(null);
+    setSection((current) => current === "discounts" ? "overview" : "discounts");
+  }
+
   return <div className="app-shell">
     <div className="main-shell">
       <header className="topbar">
         <Logo />
         <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
         <div className="topbar-actions">
-          <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={() => { setSelected(null); setSection(section === "discounts" ? "overview" : "discounts"); }}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
+          <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={toggleDiscounts}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
           <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
           <div className="topbar-account">
             <span className="user-avatar">{viewer.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
@@ -410,7 +469,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={() => { returningSchoolIdRef.current = selected.id; setSelected(null); }} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
         <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Email every school</button></div></div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
@@ -428,7 +487,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
 
         <section ref={schoolsSectionRef} className="schools-section">
           <div className="section-heading"><div><h2>Schools</h2><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Status:</span><select value={filter} onChange={(e) => { setFilter(e.target.value as Status | "All"); setVisibleCount(30); }}><option>All</option><option>Ready to order</option><option>In progress</option><option>Needs attention</option><option>Not started</option></select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>Program status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => setSelected(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className="outreach-pill">{school.outreachStatus}</span></td><td><span className={`status ${statusClass(school.status)}`}>{school.status}</span><div className="mini-progress"><span style={{ width: `${school.progress}%` }} /></div></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status filter.</p></div>}</div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><span className="outreach-pill">{school.outreachStatus}</span></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status filter.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
