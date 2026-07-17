@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { appUrl } from "@/lib/app-url";
 import { getViewer } from "@/lib/auth";
 import { encryptGmailToken } from "@/lib/gmail-crypto";
 import { gmailConfigFromEnvironment, gmailConfigured } from "@/lib/gmail-sync";
@@ -7,7 +8,7 @@ import { gmailConfigFromEnvironment, gmailConfigured } from "@/lib/gmail-sync";
 const stateCookie = "appreciation-gmail-oauth-state";
 
 function redirect(request: Request, result: string) {
-  return Response.redirect(new URL(`/?gmail=${encodeURIComponent(result)}`, request.url));
+  return Response.redirect(appUrl(`/?gmail=${encodeURIComponent(result)}`, request));
 }
 
 export async function GET(request: Request) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   if (!code || url.searchParams.has("error")) return redirect(request, "cancelled");
 
-  const redirectUri = process.env.GMAIL_REDIRECT_URI || new URL("/api/gmail/callback", request.url).toString();
+  const redirectUri = process.env.GMAIL_REDIRECT_URI || appUrl("/api/gmail/callback", request).toString();
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
