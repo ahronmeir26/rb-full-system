@@ -329,6 +329,25 @@ create trigger update_school_last_contacted_at
 after insert on public.correspondence
 for each row execute function public.update_school_last_contacted_at();
 
+create or replace function public.flag_school_reply_needed()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.direction = 'inbound' then
+    update public.schools
+    set status = 'Needs attention'
+    where id = new.school_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists flag_school_reply_needed on public.correspondence;
+create trigger flag_school_reply_needed
+after insert on public.correspondence
+for each row execute function public.flag_school_reply_needed();
+
 update public.schools school
 set last_contacted_at = latest.contacted_at
 from (

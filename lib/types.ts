@@ -1,4 +1,4 @@
-export type SchoolStatus = "Ready to order" | "In progress" | "Needs attention" | "Not started";
+export type SchoolStatus = "Ready to order" | "In progress" | "Needs attention" | "Not started" | "Complete";
 export type SchoolType = "regular" | "chassidish";
 export type OutreachStatus = {
   name: string;

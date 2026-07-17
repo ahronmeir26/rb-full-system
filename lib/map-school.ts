@@ -2,7 +2,7 @@ import type { School, SchoolStatus, SchoolType } from "./types";
 
 type SchoolRow = Partial<School> & Record<string, unknown>;
 
-const statuses = new Set<SchoolStatus>(["Ready to order", "In progress", "Needs attention", "Not started"]);
+const statuses = new Set<SchoolStatus>(["Ready to order", "In progress", "Needs attention", "Not started", "Complete"]);
 const schoolTypes = new Set<SchoolType>(["regular", "chassidish"]);
 const avatarColors = ["mint", "blue", "peach", "violet", "gold", "rose"];
 

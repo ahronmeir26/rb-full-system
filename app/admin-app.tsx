@@ -20,9 +20,11 @@ import {
   Send,
   Settings,
   ShoppingBag,
+  Truck,
+  Users,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DiscountProgram, OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 import { initial2026SchoolCode } from "@/lib/school-code";
@@ -30,6 +32,16 @@ import { outreachStatusTone } from "@/lib/outreach-status";
 import { DiscountsSection } from "./discounts-section";
 
 const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-");
+const programTimeZone = "America/New_York";
+const shortDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "numeric", day: "numeric", year: "numeric" });
+const messageDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "short", day: "numeric", year: "numeric" });
+const messageTimeFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, hour: "numeric", minute: "2-digit" });
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+function formatDate(value: string, formatter = shortDateFormatter) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown date" : formatter.format(date);
+}
 
 function Logo() {
   return (
@@ -59,6 +71,40 @@ function Avatar({ school, small = false }: { school: School; small?: boolean }) 
 
 function OutreachPill({ status }: { status: string }) {
   return <span className="outreach-pill" data-tone={outreachStatusTone(status)}>{status}</span>;
+}
+
+type ProgramStage = "Not invited" | "Invited" | "Ordered" | "Needs attention" | "Complete";
+
+function programStageFor(school: School): ProgramStage {
+  if (school.status === "Complete") return "Complete";
+  if (school.status === "Needs attention" || !school.email || !school.code) return "Needs attention";
+  if (school.orders2026 > 0 || school.status === "In progress") return "Ordered";
+  if (school.status === "Ready to order" || /sent|invite|interested|ready/i.test(school.outreachStatus)) return "Invited";
+  return "Not invited";
+}
+
+function attentionReasonFor(school: School) {
+  if (school.status === "Needs attention") return "Follow-up needed";
+  if (!school.email) return "No email contact";
+  if (!school.code) return "Coupon code missing";
+  return "";
+}
+
+const emailTemplates = [
+  { name: "Choose a template", subject: "Your school program forms and next steps", message: "Hi {firstName},\n\nPlease review your school's program information and next steps below.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team" },
+  { name: "Initial invitation", subject: "Teacher Appreciation Program — please share with staff", message: "Hi {firstName},\n\nWe are pleased to invite {school} to this year's Teacher Appreciation Program. Please share the program with your teachers and staff.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
+  { name: "Reminder", subject: "Reminder: Teacher Appreciation Program", message: "Hi {firstName},\n\nA quick reminder to share the Teacher Appreciation Program with your staff before the ordering window closes.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
+  { name: "Final call", subject: "Final call: Teacher Appreciation Program", message: "Hi {firstName},\n\nThis is a final reminder to share the Teacher Appreciation Program with your staff.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
+  { name: "Ordering help", subject: "Help with your Teacher Appreciation order", message: "Hi {firstName},\n\nWe are happy to help with your order. Please use your school code {code} at the program ordering link below.\n\n{orderLink}\n\nBest,\nA.I. Stone" },
+  { name: "Shipping update", subject: "Teacher Appreciation order update", message: "Hi {firstName},\n\nWe are working on the current Teacher Appreciation orders and will share shipping updates as soon as they are available.\n\nBest,\nA.I. Stone" },
+];
+
+function fillTemplate(value: string, school: School, contactName: string) {
+  return value
+    .replaceAll("{firstName}", (contactName || "there").split(" ")[0])
+    .replaceAll("{school}", school.name)
+    .replaceAll("{code}", school.code || "your school code")
+    .replaceAll("{orderLink}", school.code ? `https://aistone.com/rb?discount=${encodeURIComponent(school.code)}` : "https://aistone.com/rb");
 }
 
 function OrderFormDownload({ school, className = "secondary-button" }: { school: School; className?: string }) {
@@ -243,10 +289,29 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
 
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
   const contactName = school.admin || "school administrator";
+  const [contacts, setContacts] = useState<Array<{ id: string; name: string | null; email: string; title: string }>>([]);
+  const [recipientEmail, setRecipientEmail] = useState(school.email);
+  const [templateName, setTemplateName] = useState(emailTemplates[0].name);
   const [subject, setSubject] = useState("Your school program forms and next steps");
   const [message, setMessage] = useState(`Hi ${contactName.split(" ")[0]},\n\nPlease review your school's program information and next steps below.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team`);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/schools/${school.id}/contacts`)
+      .then((response) => response.json())
+      .then((result) => setContacts(Array.isArray(result?.contacts) ? result.contacts : []))
+      .catch(() => undefined);
+  }, [school.id]);
+
+  function applyTemplate(name: string) {
+    const template = emailTemplates.find((item) => item.name === name) || emailTemplates[0];
+    const selectedContact = contacts.find((contact) => contact.email === recipientEmail);
+    const nameForTemplate = selectedContact?.name || contactName;
+    setTemplateName(name);
+    setSubject(fillTemplate(template.subject, school, nameForTemplate));
+    setMessage(fillTemplate(template.message, school, nameForTemplate));
+  }
 
   async function send() {
     setLoading(true);
@@ -254,7 +319,7 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
     const response = await fetch("/api/correspondence", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ schoolIds: [school.id], subject, message }),
+      body: JSON.stringify({ schoolIds: [school.id], recipientEmail, subject, message }),
     });
     const result = await response.json().catch(() => null);
     setLoading(false);
@@ -275,21 +340,78 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
           <div><p className="eyebrow">New message</p><h2>Email {school.admin || school.name}</h2></div>
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button>
         </div>
-        <div className="compose-row"><span>To</span><strong>{school.email || "No email address recorded"}</strong></div>
+        <label className="compose-field"><span>To</span><select value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)}><option value={school.email || ""}>{school.email || "No email address recorded"}</option>{contacts.filter((contact) => contact.email !== school.email).map((contact) => <option key={contact.id} value={contact.email}>{contact.name ? `${contact.name} — ${contact.email}` : contact.email}</option>)}</select></label>
+        <label className="compose-field"><span>Template</span><select value={templateName} onChange={(event) => applyTemplate(event.target.value)}>{emailTemplates.map((template) => <option key={template.name}>{template.name}</option>)}</select></label>
         <label className="compose-field"><span>Subject</span><input value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
         <label className="compose-field message-field"><span>Message</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} /></label>
         {error && <div className="login-error" role="alert">{error}</div>}
         <div className="modal-actions">
-          <button className="secondary-button" onClick={onClose}>Save draft</button>
-          <button className="primary-button" onClick={send} disabled={!school.email || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Sending…" : "Send email"}</button>
+          <button className="secondary-button" onClick={onClose}>Cancel</button>
+          <button className="primary-button" onClick={send} disabled={!recipientEmail || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Sending…" : "Send email"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit }: { school: School; correspondenceVersion: number; onBack: () => void; onEmail: () => void; onEdit: () => void }) {
+type SchoolContact = { id: string; name: string | null; email: string; phone: string | null; title: string; is_primary: boolean };
+type ShopifyOrder = { id: string; name: string; email: string | null; createdAt: string; displayFinancialStatus: string; displayFulfillmentStatus: string; total: string; currency: string };
+
+function ContactsPanel({ school }: { school: School }) {
+  const [contacts, setContacts] = useState<SchoolContact[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [title, setTitle] = useState("Program contact");
+  const [error, setError] = useState("");
+
+  const load = useCallback(() => fetch(`/api/schools/${school.id}/contacts`).then((response) => response.json()).then((result) => setContacts(Array.isArray(result?.contacts) ? result.contacts : [])).catch(() => undefined), [school.id]);
+  useEffect(() => { void load(); }, [load]);
+  async function addContact(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    const response = await fetch(`/api/schools/${school.id}/contacts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, email, title }) });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) return setError(result?.error || "Unable to save contact.");
+    setContacts((current) => [...current.filter((contact) => contact.id !== result.contact.id), result.contact]);
+    setName(""); setEmail(""); setTitle("Program contact"); setAdding(false);
+  }
+  const visibleContacts = contacts.length ? contacts : school.email ? [{ id: "primary", name: school.admin || null, email: school.email, phone: school.phone || null, title: "Program administrator", is_primary: true }] : [];
+  return <section className="panel school-contacts-panel">
+    <div className="sidebar-panel-heading"><p className="eyebrow">People</p><h2>School contacts</h2></div>
+    <div className="contact-list">{visibleContacts.map((contact) => <div className="contact-list-item" key={contact.id}><div><strong>{contact.name || contact.email}</strong><small>{contact.title}</small><a href={`mailto:${contact.email}`}>{contact.email}</a></div>{contact.is_primary && <span>Primary</span>}</div>)}</div>
+    {adding ? <form className="contact-add-form" onSubmit={addContact}><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" /><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Role" />{error && <small className="contact-error">{error}</small>}<div><button type="button" className="secondary-button" onClick={() => setAdding(false)}>Cancel</button><button className="primary-button">Add contact</button></div></form> : <button className="secondary-button add-contact-button" onClick={() => setAdding(true)}><Users size={15} /> Add contact</button>}
+  </section>;
+}
+
+function ShopifyOrdersPanel({ school }: { school: School }) {
+  const [orders, setOrders] = useState<ShopifyOrder[] | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  async function loadOrders() {
+    if (!school.code) return;
+    setLoading(true); setError("");
+    const response = await fetch(`/api/shopify/orders?discountCode=${encodeURIComponent(school.code)}`);
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) return setError(result?.error || "Unable to load orders.");
+    setOrders(result.orders || []);
+  }
+  return <section className="panel shopify-orders-panel"><div className="sidebar-panel-heading"><p className="eyebrow">Shopify</p><h2>Orders & shipping</h2></div>{orders === null ? <div className="order-lookup"><p>Load only the orders that used <code>{school.code || "this school's code"}</code>.</p><button className="secondary-button" disabled={!school.code || loading} onClick={loadOrders}><Truck size={15} /> {loading ? "Loading…" : "View matching orders"}</button></div> : <div className="order-summary-list">{orders.length ? orders.map((order) => <div className="order-summary" key={order.id}><div><strong>{order.name}</strong><small>{formatDate(order.createdAt)} · {order.email || "No email"}</small></div><span>{order.displayFulfillmentStatus.replaceAll("_", " ")}</span></div>) : <p className="order-empty">No orders found with this code.</p>}</div>}{error && <p className="contact-error">{error}</p>}</section>;
+}
+
+function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, onStageChanged }: { school: School; correspondenceVersion: number; onBack: () => void; onEmail: () => void; onEdit: () => void; onStageChanged: (status: Status, outreachStatus?: string) => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
+  const [savingStage, setSavingStage] = useState(false);
+
+  async function changeStage(programStage: ProgramStage) {
+    setSavingStage(true);
+    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ programStage }) });
+    const result = await response.json().catch(() => null);
+    setSavingStage(false);
+    if (!response.ok) return;
+    onStageChanged(result.status as Status, result.outreachStatus);
+  }
 
   return (
     <main className="content detail-content">
@@ -313,8 +435,8 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit }
           <section className="panel school-summary-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">School details</p><h2>At a glance</h2></div>
             <div className="school-data-grid">
-              <div className="school-data-item"><span>Outreach status</span><strong><OutreachPill status={school.outreachStatus} /></strong></div>
-              <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? new Date(school.lastContactedAt).toLocaleDateString() : "No contact recorded"}</strong></div>
+              <div className="school-data-item"><span>Current stage</span><label className="stage-select"><select aria-label="Change current program stage" value={programStageFor(school)} disabled={savingStage} onChange={(event) => changeStage(event.target.value as ProgramStage)}><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Needs attention</option><option>Complete</option></select><ChevronDown size={14} /></label></div>
+              <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No contact recorded"}</strong></div>
               <div className="school-data-item school-data-wide"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
               <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
               <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
@@ -328,6 +450,8 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit }
               <div className="school-year-row"><span>2024</span><strong>{school.orders2024.toLocaleString()} <small>orders</small></strong><code>{school.code2024 || "Code not provided"}</code></div>
             </div>
           </section>
+          <ShopifyOrdersPanel school={school} />
+          <ContactsPanel school={school} />
         </aside>
       </div>
     </main>
@@ -366,9 +490,8 @@ function Correspondence({ school, refreshVersion, onEmail }: { school: School; r
       const incoming = record.direction === "inbound";
       const from = record.from_email || (incoming ? "School contact" : "Appreciation Initiative");
       const to = record.to_email || (incoming ? "Appreciation Initiative" : "School contact");
-      const contactedAt = new Date(record.contacted_at);
-      const date = contactedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-      const time = contactedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      const date = formatDate(record.contacted_at, messageDateFormatter);
+      const time = formatDate(record.contacted_at, messageTimeFormatter);
       const preview = record.body.replace(/\s+/g, " ").trim();
       return <details className={`correspondence-entry ${incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
@@ -489,7 +612,7 @@ function SettingsModal({ email, onClose, onCorrespondenceChanged }: {
             : gmailStatus.connected && gmailStatus.connection ? <>
               <div className="gmail-account">
                 <span className="gmail-icon"><Mail size={18} /></span>
-                <div><strong>{gmailStatus.connection.gmail_email}</strong><small>{gmailStatus.connection.last_synced_at ? `Last synced ${new Date(gmailStatus.connection.last_synced_at).toLocaleString()}` : "Ready for the first sync"} · {gmailStatus.connection.messages_synced.toLocaleString()} emails imported</small></div>
+                <div><strong>{gmailStatus.connection.gmail_email}</strong><small>{gmailStatus.connection.last_synced_at ? `Last synced ${formatDate(gmailStatus.connection.last_synced_at, dateTimeFormatter)}` : "Ready for the first sync"} · {gmailStatus.connection.messages_synced.toLocaleString("en-US")} emails imported</small></div>
               </div>
               {gmailStatus.connection.last_sync_error && <div className="login-error" role="alert">{gmailStatus.connection.last_sync_error}</div>}
               <div className="gmail-actions"><button type="button" className="secondary-button" disabled={gmailLoading} onClick={disconnectGmail}>Disconnect</button><button type="button" className="primary-button" disabled={gmailLoading} onClick={syncGmail}><RefreshCw className={gmailLoading ? "spin" : ""} size={15} /> {gmailLoading ? "Syncing…" : "Sync now"}</button></div>
@@ -526,7 +649,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [correspondenceVersion, setCorrespondenceVersion] = useState(0);
   const [gmailNotice, setGmailNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState<"All" | ProgramStage>("All");
   const [visibleCount, setVisibleCount] = useState(30);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const schoolsSectionRef = useRef<HTMLElement>(null);
@@ -535,8 +658,8 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const gmailSyncingRef = useRef(false);
 
   const filtered = useMemo(() => schools.filter((school) => {
-    const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.code}`.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch && (filter === "All" || school.outreachStatus === filter);
+    const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.email} ${school.code} ${school.phone}`.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && (filter === "All" || programStageFor(school) === filter);
   }), [schools, search, filter]);
   const visibleSchools = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
@@ -707,7 +830,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} onStageChanged={(status, outreachStatus) => { const updated = { ...selected, status, outreachStatus: outreachStatus || selected.outreachStatus }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected(updated); }} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">
@@ -722,8 +845,8 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         {gmailNotice && <div className="success-banner dismissible"><Mail size={18} /><div><strong>Gmail</strong><span>{gmailNotice}</span></div><button onClick={() => setGmailNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
 
         <section ref={schoolsSectionRef} className="schools-section">
-          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>Track eligibility, engagement, codes, and three years of orders.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="Search schools" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Communication:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by communication status" value={filter} onChange={(e) => { setFilter(e.target.value); setVisibleCount(30); }}><option>All</option>{outreachStatuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Outreach status</th><th>2026 orders</th><th>2025 orders</th><th>2024 orders</th><th>2026 code</th><th>Administrator</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{[school.city, school.state].filter(Boolean).join(", ") || "Location not provided"}</span></div></div></td><td><OutreachPill status={school.outreachStatus} /></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className="muted-number">{school.orders2025}</span></td><td><span className="muted-number">{school.orders2024}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><div className="admin-cell"><span>{school.admin || "Not provided"}</span><small>{school.email || "Email not provided"}</small></div></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or communication status.</p></div>}</div>
+          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span></div><p>See the current program stage, orders, and anything that needs attention.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="School, contact, email, or code" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Stage:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by program stage" value={filter} onChange={(e) => { setFilter(e.target.value as "All" | ProgramStage); setVisibleCount(30); }}><option>All</option><option>Needs attention</option><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Complete</option></select><ChevronDown size={14} /></label></div></div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>2026 stage</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const stage = programStageFor(school); const reason = attentionReasonFor(school); return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={stage} /></td><td><strong className="number-cell">{school.orders2026}</strong></td><td><span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span></td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className="code">{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or program stage.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}

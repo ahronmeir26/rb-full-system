@@ -239,17 +239,16 @@ test("assigns semantic colors to built-in and custom outreach statuses", () => {
   assert.equal(outreachStatusTone("On hold"), "custom");
 });
 
-test("filters the school list by communication status", async () => {
+test("filters the school list by current program stage", async () => {
   const [editor, styles] = await Promise.all([
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(editor, /school\.outreachStatus === filter/);
-  assert.match(editor, /<span>Communication:<\/span>/);
+  assert.match(editor, /programStageFor\(school\) === filter/);
+  assert.match(editor, /<span>Stage:<\/span>/);
   assert.match(editor, /className="filter-select-value">\{filter\}<\/span>/);
-  assert.match(editor, /aria-label="Filter by communication status"/);
-  assert.match(editor, /outreachStatuses\.map\(\(status\) => <option/);
-  assert.doesNotMatch(editor, /school\.status === filter/);
+  assert.match(editor, /aria-label="Filter by program stage"/);
+  assert.match(editor, /<option>Needs attention<\/option>/);
   assert.match(styles, /\.filter-select select \{ position: absolute; inset: 0; width: 100%; height: 100%;/);
 });
 

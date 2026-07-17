@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     : [];
   const subject = typeof body?.subject === "string" ? body.subject.trim() : "";
   const message = typeof body?.message === "string" ? body.message.trim() : "";
+  const recipientEmail = typeof body?.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
   if (!schoolIds.length || schoolIds.length > 1000) {
     return Response.json({ error: "Between 1 and 1,000 schools are required." }, { status: 400 });
   }
@@ -74,8 +75,11 @@ export async function POST(request: Request) {
   }
 
   const contactedAt = new Date().toISOString();
+  const requestedRecipientIsValid = !recipientEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail);
+  if (!requestedRecipientIsValid) return Response.json({ error: "Enter a valid recipient email address." }, { status: 400 });
   const rows = (schools ?? [])
-    .filter((school) => school.email?.includes("@"))
+    .map((school) => ({ ...school, recipientEmail: recipientEmail || school.email }))
+    .filter((school) => school.recipientEmail?.includes("@"))
     .map((school) => {
       const eventId = crypto.randomUUID();
       return {
@@ -87,7 +91,7 @@ export async function POST(request: Request) {
           subject,
           body: message,
           from_email: viewer.email,
-          to_email: school.email,
+          to_email: school.recipientEmail,
           status: "queued",
           external_message_id: eventId,
           contacted_at: contactedAt,
@@ -96,7 +100,7 @@ export async function POST(request: Request) {
         },
         klaviyo: {
           eventId,
-          toEmail: school.email,
+          toEmail: school.recipientEmail,
           subject,
           message,
           senderEmail: viewer.email,

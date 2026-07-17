@@ -33,6 +33,17 @@ export type ShopifyCollection = {
   handle: string;
 };
 
+export type ShopifyOrderSummary = {
+  id: string;
+  name: string;
+  email: string | null;
+  createdAt: string;
+  displayFinancialStatus: string;
+  displayFulfillmentStatus: string;
+  total: string;
+  currency: string;
+};
+
 function shopifyCredentials() {
   const store = (process.env.SHOPIFY_STORE_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const clientId = process.env.SHOPIFY_CLIENT_ID || "";
@@ -141,6 +152,46 @@ export async function listShopifyCollections(search = ""): Promise<ShopifyCollec
     { query: search.trim() || null },
   );
   return data.collections.nodes;
+}
+
+export async function listShopifyOrdersByDiscountCode(code: string): Promise<ShopifyOrderSummary[]> {
+  const normalizedCode = code.trim();
+  if (!normalizedCode) return [];
+  const query = `#graphql
+    query AppreciationOrders($query: String!) {
+      orders(first: 50, query: $query, sortKey: CREATED_AT, reverse: true) {
+        nodes {
+          id
+          name
+          email
+          createdAt
+          displayFinancialStatus
+          displayFulfillmentStatus
+          currentTotalPriceSet { shopMoney { amount currencyCode } }
+        }
+      }
+    }`;
+  const data = await shopifyGraphql<{
+    orders: { nodes: Array<{
+      id: string;
+      name: string;
+      email: string | null;
+      createdAt: string;
+      displayFinancialStatus: string;
+      displayFulfillmentStatus: string;
+      currentTotalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
+    }> };
+  }>(query, { query: `discount_code:${normalizedCode}` });
+  return data.orders.nodes.map((order) => ({
+    id: order.id,
+    name: order.name,
+    email: order.email,
+    createdAt: order.createdAt,
+    displayFinancialStatus: order.displayFinancialStatus,
+    displayFulfillmentStatus: order.displayFulfillmentStatus,
+    total: order.currentTotalPriceSet.shopMoney.amount,
+    currency: order.currentTotalPriceSet.shopMoney.currencyCode,
+  }));
 }
 
 function functionConfiguration(program: DiscountProgram) {
