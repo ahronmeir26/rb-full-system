@@ -3,6 +3,7 @@ api_version = "2026-07"
 [[extensions]]
 name = "Appreciation product discounts"
 handle = "appreciation-product-discounts"
+uid = "bf111263-f7cd-7d7e-9ec8-4b14f8e4020ee909781b"
 type = "function"
 description = "Applies independent men's and boys' preorder discounts for 2026 Appreciation codes."
 
@@ -12,7 +13,7 @@ input_query = "src/cart_lines_discounts_generate_run.graphql"
 export = "cart-lines-discounts-generate-run"
 
 [extensions.build]
-command = "npm exec -- shopify app function build"
+command = ""
 path = "dist/function.wasm"
 
 [extensions.input.variables]
