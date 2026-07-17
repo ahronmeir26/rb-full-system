@@ -83,11 +83,12 @@ test("database schema covers the complete school-program workflow", async () => 
 });
 
 test("stores and manages the shared 2026 Shopify discount program", async () => {
-  const [schema, editor, settingsRoute, syncRoute, functionQuery] = await Promise.all([
+  const [schema, editor, settingsRoute, syncRoute, shopify, functionQuery] = await Promise.all([
     readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/discounts-section.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/discounts/2026/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/discounts/2026/sync/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/shopify.ts", import.meta.url), "utf8"),
     readFile(new URL("../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.graphql", import.meta.url), "utf8"),
   ]);
 
@@ -102,6 +103,7 @@ test("stores and manages the shared 2026 Shopify discount program", async () => 
   assert.doesNotMatch(editor, /Allow other discounts/);
   assert.match(settingsRoute, /\.from\("discount_programs"\)/);
   assert.match(syncRoute, /syncShopifyDiscount/);
+  assert.match(shopify, /discountClasses:\s*\["PRODUCT"\]/);
   assert.match(functionQuery, /inMensCollection: inAnyCollection/);
   assert.match(functionQuery, /inBoysCollection: inAnyCollection/);
 });

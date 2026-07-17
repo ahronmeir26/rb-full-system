@@ -162,6 +162,7 @@ function discountInput(program: DiscountProgram, includeFunctionId: boolean) {
   const input: Record<string, unknown> = {
     code: program.mainCode,
     title: program.title,
+    discountClasses: ["PRODUCT"],
     appliesOncePerCustomer: program.appliesOncePerCustomer,
     combinesWith: {
       orderDiscounts: program.combinesWithOrderDiscounts,
