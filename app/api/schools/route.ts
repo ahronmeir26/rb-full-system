@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       email: email || null,
       phone: phone || null,
       students,
-      status: "Not started",
+      program_stage: "Not invited",
       progress: 0,
       initials: initialsFor(name),
       color: avatarColors[Math.floor(Math.random() * avatarColors.length)],

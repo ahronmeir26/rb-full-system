@@ -13,6 +13,10 @@ const builtInTones: Record<string, OutreachStatusTone> = {
   "not interested": "negative",
   interested: "positive",
   sent: "complete",
+  "not invited": "neutral",
+  invited: "info",
+  ordered: "positive",
+  complete: "complete",
 };
 
 export function outreachStatusTone(status: string): OutreachStatusTone {

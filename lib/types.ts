@@ -1,4 +1,4 @@
-export type SchoolStatus = "Ready to order" | "In progress" | "Needs attention" | "Not started" | "Complete";
+export type ProgramStage = "Not invited" | "Invited" | "Ordered" | "Complete";
 export type SchoolType = "regular" | "chassidish";
 export type OutreachStatus = {
   name: string;
@@ -42,7 +42,8 @@ export type School = {
   schoolType: SchoolType;
   outreachStatus: string;
   lastContactedAt: string;
-  lastMessageDirection: "inbound" | "outbound" | "";
+  replyPending: boolean;
+  needsFollowUp: boolean;
   district: string;
   city: string;
   state: string;
@@ -56,7 +57,7 @@ export type School = {
   orders2026: number;
   orders2025: number;
   orders2024: number;
-  status: SchoolStatus;
+  programStage: ProgramStage;
   progress: number;
   eligibility: string;
   lastContact: string;

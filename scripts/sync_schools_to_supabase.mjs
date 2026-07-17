@@ -24,7 +24,9 @@ const rows = schools.map((school) => ({
   orders_2026: school.orders2026,
   orders_2025: school.orders2025,
   orders_2024: school.orders2024,
-  status: school.status,
+  program_stage: school.status === "Complete" ? "Complete"
+    : school.orders2026 > 0 || school.status === "In progress" ? "Ordered"
+      : "Not invited",
   progress: school.progress,
   eligibility: school.eligibility || null,
   last_contact: school.lastContact || null,

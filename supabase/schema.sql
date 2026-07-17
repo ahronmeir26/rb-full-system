@@ -30,8 +30,9 @@ create table if not exists public.schools (
   orders_2026 integer not null default 0 check (orders_2026 >= 0),
   orders_2025 integer not null default 0 check (orders_2025 >= 0),
   orders_2024 integer not null default 0 check (orders_2024 >= 0),
-  status text not null default 'Not started'
-    check (status in ('Ready to order', 'In progress', 'Needs attention', 'Not started')),
+  program_stage text not null default 'Not invited'
+    check (program_stage in ('Not invited', 'Invited', 'Ordered', 'Complete')),
+  needs_follow_up boolean not null default false,
   progress integer not null default 0 check (progress between 0 and 100),
   eligibility text,
   last_contact text,
@@ -45,7 +46,6 @@ create unique index if not exists schools_name_code_idx on public.schools (name,
 create unique index if not exists schools_2026_code_idx
   on public.schools (lower(code))
   where code is not null and btrim(code) <> '';
-create index if not exists schools_status_idx on public.schools (status);
 create index if not exists schools_email_idx on public.schools (lower(email));
 
 create or replace function public.sync_schools_id_sequence()
@@ -95,11 +95,6 @@ alter table public.schools
   check (school_type in ('regular', 'chassidish'));
 alter table public.schools add column if not exists outreach_status text;
 alter table public.schools add column if not exists last_contacted_at timestamptz;
-alter table public.schools add column if not exists last_message_direction text;
-alter table public.schools drop constraint if exists schools_last_message_direction_check;
-alter table public.schools
-  add constraint schools_last_message_direction_check
-  check (last_message_direction is null or last_message_direction in ('inbound', 'outbound'));
 
 create table if not exists public.school_outreach_statuses (
   name text primary key check (btrim(name) <> ''),
@@ -131,6 +126,50 @@ alter table public.schools drop constraint if exists schools_outreach_status_fke
 alter table public.schools
   add constraint schools_outreach_status_fkey
   foreign key (outreach_status) references public.school_outreach_statuses(name);
+
+-- Migrate the legacy status/last_message_direction columns to the stored
+-- program stage plus the manual follow-up flag. The legacy 'Needs attention'
+-- status meant either "latest email is inbound" (trigger-written, now the
+-- derived reply queue) or "manually flagged" (now needs_follow_up).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'schools' and column_name = 'status'
+  ) then
+    alter table public.schools add column if not exists program_stage text;
+    alter table public.schools add column if not exists needs_follow_up boolean;
+    update public.schools
+    set program_stage = case
+      when status = 'Complete' then 'Complete'
+      when orders_2026 > 0 or status = 'In progress' then 'Ordered'
+      when lower(outreach_status) <> 'not interested'
+        and lower(outreach_status) ~ '(sent|invite|interested|ready)' then 'Invited'
+      else 'Not invited'
+    end
+    where program_stage is null;
+    update public.schools
+    set needs_follow_up = (status = 'Needs attention' and coalesce(last_message_direction, '') <> 'inbound')
+    where needs_follow_up is null;
+    alter table public.schools drop column status;
+  end if;
+end;
+$$;
+
+update public.schools set program_stage = 'Not invited' where program_stage is null;
+alter table public.schools alter column program_stage set default 'Not invited';
+alter table public.schools alter column program_stage set not null;
+alter table public.schools drop constraint if exists schools_program_stage_check;
+alter table public.schools
+  add constraint schools_program_stage_check
+  check (program_stage in ('Not invited', 'Invited', 'Ordered', 'Complete'));
+update public.schools set needs_follow_up = false where needs_follow_up is null;
+alter table public.schools alter column needs_follow_up set default false;
+alter table public.schools alter column needs_follow_up set not null;
+alter table public.schools drop constraint if exists schools_last_message_direction_check;
+alter table public.schools drop column if exists last_message_direction;
+drop index if exists public.schools_status_idx;
+create index if not exists schools_program_stage_idx on public.schools (program_stage);
 
 create table if not exists public.school_outreach_status_history (
   id uuid primary key default gen_random_uuid(),
@@ -297,6 +336,9 @@ create table if not exists public.correspondence (
   contacted_at timestamptz not null default now(),
   sent_at timestamptz,
   received_at timestamptz,
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id) on delete set null,
+  resolution text check (resolution in ('replied', 'no_reply_needed')),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -314,32 +356,43 @@ where contacted_at is null;
 alter table public.correspondence alter column contacted_at set default now();
 alter table public.correspondence alter column contacted_at set not null;
 
+-- Reply-queue resolution: an inbound email is "open" until it is manually
+-- resolved or a later outbound email exists. Backfill marks historical
+-- inbound emails that already received a reply as resolved.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'correspondence' and column_name = 'resolved_at'
+  ) then
+    alter table public.correspondence add column resolved_at timestamptz;
+    alter table public.correspondence add column resolved_by uuid references auth.users(id) on delete set null;
+    alter table public.correspondence add column resolution text
+      check (resolution in ('replied', 'no_reply_needed'));
+    update public.correspondence inbound
+    set resolved_at = now(), resolution = 'replied'
+    where inbound.direction = 'inbound'
+      and inbound.channel = 'email'
+      and exists (
+        select 1
+        from public.correspondence outbound
+        where outbound.school_id = inbound.school_id
+          and outbound.direction = 'outbound'
+          and outbound.channel = 'email'
+          and outbound.status not in ('draft', 'failed')
+          and outbound.contacted_at >= inbound.contacted_at
+      );
+  end if;
+end;
+$$;
+
 create or replace function public.update_school_communication_state()
 returns trigger
 language plpgsql
 as $$
-declare
-  latest_direction text;
 begin
-  select correspondence.direction
-  into latest_direction
-  from public.correspondence correspondence
-  where correspondence.school_id = new.school_id
-    and correspondence.channel = 'email'
-    and not (correspondence.direction = 'outbound' and correspondence.status in ('draft', 'failed'))
-  order by correspondence.contacted_at desc, correspondence.created_at desc
-  limit 1;
-
   update public.schools
-  set last_contacted_at = greatest(coalesce(last_contacted_at, new.contacted_at), new.contacted_at),
-      last_message_direction = latest_direction,
-      status = case
-        when latest_direction = 'inbound' then 'Needs attention'
-        when status = 'Complete' then status
-        when orders_2026 > 0 then 'In progress'
-        when lower(outreach_status) ~ '(sent|invite|interested|ready)' then 'Ready to order'
-        else 'Not started'
-      end
+  set last_contacted_at = greatest(coalesce(last_contacted_at, new.contacted_at), new.contacted_at)
   where id = new.school_id;
   return new;
 end;
@@ -349,7 +402,7 @@ drop trigger if exists update_school_last_contacted_at on public.correspondence;
 drop trigger if exists flag_school_reply_needed on public.correspondence;
 drop trigger if exists update_school_communication_state on public.correspondence;
 create trigger update_school_communication_state
-after insert or update of status on public.correspondence
+after insert on public.correspondence
 for each row execute function public.update_school_communication_state();
 
 update public.schools school
@@ -361,23 +414,37 @@ from (
 ) latest
 where school.id = latest.school_id;
 
-update public.schools school
-set last_message_direction = latest.direction,
-    status = case
-      when latest.direction = 'inbound' then 'Needs attention'
-      when school.status = 'Complete' then school.status
-      when school.orders_2026 > 0 then 'In progress'
-      when lower(school.outreach_status) ~ '(sent|invite|interested|ready)' then 'Ready to order'
-      else 'Not started'
-    end
-from (
-  select distinct on (school_id) school_id, direction, contacted_at
-  from public.correspondence
-  where channel = 'email'
-    and not (direction = 'outbound' and status in ('draft', 'failed'))
-  order by school_id, contacted_at desc, created_at desc
-) latest
-where school.id = latest.school_id;
+create index if not exists correspondence_school_email_contacted_idx
+  on public.correspondence (school_id, contacted_at desc)
+  where channel = 'email';
+
+-- Read-time rollup: a school needs a reply while it has at least one
+-- unresolved inbound email without a later non-failed outbound email.
+drop view if exists public.schools_overview;
+create view public.schools_overview
+with (security_invoker = on)
+as
+select school.*,
+  exists (
+    select 1
+    from public.correspondence inbound
+    where inbound.school_id = school.id
+      and inbound.direction = 'inbound'
+      and inbound.channel = 'email'
+      and inbound.resolved_at is null
+      and not exists (
+        select 1
+        from public.correspondence outbound
+        where outbound.school_id = school.id
+          and outbound.direction = 'outbound'
+          and outbound.channel = 'email'
+          and outbound.status not in ('draft', 'failed')
+          and outbound.contacted_at >= inbound.contacted_at
+      )
+  ) as reply_pending
+from public.schools school;
+
+grant select on public.schools_overview to service_role;
 
 create table if not exists public.gmail_connections (
   id uuid primary key default gen_random_uuid(),
@@ -599,6 +666,7 @@ comment on table public.discount_programs is 'Shared Shopify discount configurat
 comment on table public.discount_school_codes is 'Per-school redeem-code synchronization state for a yearly Shopify discount.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';
+comment on view public.schools_overview is 'Schools plus the derived reply_pending flag: any unresolved inbound email without a later non-failed outbound email.';
 comment on table public.gmail_connections is 'Encrypted read-only Gmail connections and incremental synchronization state.';
 
 grant usage on schema public to service_role;

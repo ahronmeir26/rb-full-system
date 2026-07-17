@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock3,
   Download,
+  Flag,
   LogOut,
   Mail,
   MessageCircle,
@@ -25,13 +26,13 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DiscountProgram, OutreachStatus, School, SchoolStatus as Status } from "@/lib/types";
+import type { DiscountProgram, OutreachStatus, ProgramStage, School } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 import { initial2026SchoolCode } from "@/lib/school-code";
 import { outreachStatusTone } from "@/lib/outreach-status";
 import { DiscountsSection } from "./discounts-section";
 
-const statusClass = (status: Status) => status.toLowerCase().replaceAll(" ", "-");
+const stageClass = (stage: ProgramStage) => stage.toLowerCase().replaceAll(" ", "-");
 const programTimeZone = "America/New_York";
 const shortDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "numeric", day: "numeric", year: "numeric" });
 const messageDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "short", day: "numeric", year: "numeric" });
@@ -73,30 +74,16 @@ function OutreachPill({ status }: { status: string }) {
   return <span className="outreach-pill" data-tone={outreachStatusTone(status)}>{status}</span>;
 }
 
-type ProgramStage = "Not invited" | "Invited" | "Ordered" | "Needs attention" | "Complete";
-type SchoolFilter = "All" | "Reply needed" | ProgramStage;
+const programStages: ProgramStage[] = ["Not invited", "Invited", "Ordered", "Complete"];
+type SchoolFilter = "All" | "Reply needed" | "Flagged for follow-up" | ProgramStage;
 
-function programStageFor(school: School): ProgramStage {
-  if (school.status === "Complete") return "Complete";
-  if (school.lastMessageDirection === "inbound" || school.status === "Needs attention" || !school.email || !school.code) return "Needs attention";
-  if (school.orders2026 > 0 || school.status === "In progress") return "Ordered";
-  if (school.status === "Ready to order" || /sent|invite|interested|ready/i.test(school.outreachStatus)) return "Invited";
-  return "Not invited";
-}
-
-function attentionReasonFor(school: School) {
-  if (school.lastMessageDirection === "inbound") return "Incoming email — reply needed";
-  if (school.status === "Needs attention") return "Follow-up needed";
-  if (!school.email) return "No email contact";
-  if (!school.code) return "Coupon code missing";
-  return "";
-}
-
-function statusAfterOutbound(school: School): Status {
-  if (school.status === "Complete") return "Complete";
-  if (school.orders2026 > 0) return "In progress";
-  if (/sent|invite|interested|ready/i.test(school.outreachStatus)) return "Ready to order";
-  return "Not started";
+function attentionReasonsFor(school: School) {
+  const reasons: string[] = [];
+  if (school.replyPending) reasons.push("Incoming email — reply needed");
+  if (school.needsFollowUp) reasons.push("Flagged for follow-up");
+  if (!school.email) reasons.push("No email contact");
+  if (!school.code) reasons.push("Coupon code missing");
+  return reasons;
 }
 
 const emailTemplates = [
@@ -134,6 +121,8 @@ type CorrespondenceRecord = {
   to_email: string | null;
   status: string;
   contacted_at: string;
+  resolved_at: string | null;
+  resolution: "replied" | "no_reply_needed" | null;
 };
 
 type GmailStatus = {
@@ -439,9 +428,10 @@ function ShopifyOrdersPanel({ school }: { school: School }) {
   return <section className="panel shopify-orders-panel"><div className="sidebar-panel-heading"><p className="eyebrow">Shopify</p><h2>Orders & shipping</h2></div>{orders === null ? <div className="order-lookup"><p>Load only the orders that used <code>{school.code || "this school's code"}</code>.</p><button className="secondary-button" disabled={!school.code || loading} onClick={loadOrders}><Truck size={15} /> {loading ? "Loading…" : "View matching orders"}</button></div> : <div className="order-summary-list">{orders.length ? orders.map((order) => <div className="order-summary" key={order.id}><div><strong>{order.name}</strong><small>{formatDate(order.createdAt)} · {order.email || "No email"}</small></div><span>{order.displayFulfillmentStatus.replaceAll("_", " ")}</span></div>) : <p className="order-empty">No orders found with this code.</p>}</div>}{error && <p className="contact-error">{error}</p>}</section>;
 }
 
-function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, onStageChanged, onCorrespondenceChanged }: { school: School; correspondenceVersion: number; onBack: () => void; onEmail: () => void; onEdit: () => void; onStageChanged: (status: Status, outreachStatus?: string) => void; onCorrespondenceChanged: () => void }) {
+function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack, onEmail, onEdit, onSchoolChanged, onCorrespondenceChanged, onResolveReplies }: { school: School; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEmail: () => void; onEdit: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingStage, setSavingStage] = useState(false);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
 
   async function changeStage(programStage: ProgramStage) {
     setSavingStage(true);
@@ -449,7 +439,16 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, 
     const result = await response.json().catch(() => null);
     setSavingStage(false);
     if (!response.ok) return;
-    onStageChanged(result.status as Status, result.outreachStatus);
+    onSchoolChanged({ programStage: result.programStage as ProgramStage });
+  }
+
+  async function toggleFollowUp() {
+    setSavingFollowUp(true);
+    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ needsFollowUp: !school.needsFollowUp }) });
+    const result = await response.json().catch(() => null);
+    setSavingFollowUp(false);
+    if (!response.ok) return;
+    onSchoolChanged({ needsFollowUp: result.needsFollowUp === true });
   }
 
   return (
@@ -459,7 +458,7 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, 
         <div className="detail-title">
           <Avatar school={school} />
           <div className="detail-title-copy">
-            <div className="title-line"><h1>{school.name}</h1><span className={`status ${statusClass(school.status)}`}>{school.status}</span></div>
+            <div className="title-line"><h1>{school.name}</h1><span className={`status ${stageClass(school.programStage)}`}>{school.programStage}</span>{school.replyPending && <><span className="status reply-needed"><Mail size={13} /> Reply needed</span><button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button></>}{school.needsFollowUp && <span className="status follow-up"><Flag size={13} /> Follow-up</span>}</div>
             <div className="detail-meta">
               <span>{[school.district, location].filter(Boolean).join(" · ")}</span>
               <span className={`detail-code ${school.code ? "" : "unassigned"}`}><span>2026 code</span>{school.code || "Not assigned"}</span>
@@ -469,12 +468,13 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, 
         <div className="detail-actions"><button className="secondary-button" onClick={onEdit}><Pencil size={16} /> Edit school</button><OrderFormDownload school={school} /><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={16} /> Email administrator</button></div>
       </div>
       <div className="school-correspondence-layout">
-        <Correspondence school={school} refreshVersion={correspondenceVersion} onEmail={onEmail} onNoteSaved={onCorrespondenceChanged} />
+        <Correspondence school={school} refreshVersion={correspondenceVersion} onEmail={onEmail} onNoteSaved={onCorrespondenceChanged} onReplyPendingChanged={(replyPending) => onSchoolChanged({ replyPending })} />
         <aside className="detail-sidebar" aria-label="School details">
           <section className="panel school-summary-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">School details</p><h2>At a glance</h2></div>
             <div className="school-data-grid">
-              <div className="school-data-item"><span>Current stage</span><label className="stage-select"><select aria-label="Change current program stage" value={programStageFor(school)} disabled={savingStage} onChange={(event) => changeStage(event.target.value as ProgramStage)}><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Needs attention</option><option>Complete</option></select><ChevronDown size={14} /></label></div>
+              <div className="school-data-item"><span>Current stage</span><label className="stage-select"><select aria-label="Change current program stage" value={school.programStage} disabled={savingStage} onChange={(event) => changeStage(event.target.value as ProgramStage)}>{programStages.map((stage) => <option key={stage}>{stage}</option>)}</select><ChevronDown size={14} /></label></div>
+              <div className="school-data-item"><span>Follow-up</span><button type="button" className={`follow-up-toggle ${school.needsFollowUp ? "active" : ""}`} disabled={savingFollowUp} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}><Flag size={13} /> {school.needsFollowUp ? "Flagged — click to clear" : "Flag for follow-up"}</button></div>
               <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No contact recorded"}</strong></div>
               <div className="school-data-item school-data-wide"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
               <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
@@ -497,13 +497,47 @@ function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit, 
   );
 }
 
-function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { school: School; refreshVersion: number; onEmail: () => void; onNoteSaved: () => void }) {
+function latestOutboundAt(records: CorrespondenceRecord[]) {
+  return records
+    .filter((record) => record.direction === "outbound" && record.channel === "email" && record.status !== "draft" && record.status !== "failed")
+    .reduce<string | null>((latest, record) => latest && latest >= record.contacted_at ? latest : record.contacted_at, null);
+}
+
+// An inbound email is awaiting a reply until it is manually resolved or a
+// later outbound email exists — the same rule the schools_overview view uses.
+function awaitingReply(record: CorrespondenceRecord, repliedAt: string | null) {
+  return record.direction === "inbound"
+    && record.channel === "email"
+    && !record.resolved_at
+    && (!repliedAt || record.contacted_at > repliedAt);
+}
+
+function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyPendingChanged }: { school: School; refreshVersion: number; onEmail: () => void; onNoteSaved: () => void; onReplyPendingChanged: (replyPending: boolean) => void }) {
   const [records, setRecords] = useState<CorrespondenceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingNote, setAddingNote] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const noteCount = records.filter((record) => record.channel === "note").length;
   const incomingCount = records.filter((record) => record.direction === "inbound" && record.channel !== "note").length;
   const outgoingCount = records.length - incomingCount - noteCount;
+  const repliedAt = latestOutboundAt(records);
+  const awaitingCount = records.filter((record) => awaitingReply(record, repliedAt)).length;
+
+  async function setResolution(record: CorrespondenceRecord, action: "resolve" | "reopen") {
+    setResolvingId(record.id);
+    const response = await fetch(`/api/correspondence/${record.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const result = await response.json().catch(() => null);
+    setResolvingId(null);
+    if (!response.ok || !result?.message) return;
+    const updated = records.map((item) => item.id === record.id ? { ...item, ...result.message } as CorrespondenceRecord : item);
+    setRecords(updated);
+    const updatedRepliedAt = latestOutboundAt(updated);
+    onReplyPendingChanged(updated.some((item) => awaitingReply(item, updatedRepliedAt)));
+  }
 
   useEffect(() => {
     let active = true;
@@ -525,6 +559,7 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
     {!loading && records.length > 0 && <div className="correspondence-overview" aria-label="Correspondence totals">
       <span><i><MessageCircle size={15} /></i><small>All messages</small><strong>{records.length.toLocaleString()}</strong></span>
       <span className="incoming"><i><Mail size={15} /></i><small>Incoming</small><strong>{incomingCount.toLocaleString()}</strong></span>
+      {awaitingCount > 0 && <span className="awaiting"><i><Clock3 size={15} /></i><small>Awaiting reply</small><strong>{awaitingCount.toLocaleString()}</strong></span>}
       <span className="outgoing"><i><Send size={14} /></i><small>Sent</small><strong>{outgoingCount.toLocaleString()}</strong></span>
       <span className="note"><i><MessageCircle size={15} /></i><small>Notes</small><strong>{noteCount.toLocaleString()}</strong></span>
     </div>}
@@ -536,11 +571,16 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
       const date = formatDate(record.contacted_at, messageDateFormatter);
       const time = formatDate(record.contacted_at, messageTimeFormatter);
       const preview = record.body.replace(/\s+/g, " ").trim();
+      const isOpen = awaitingReply(record, repliedAt);
+      const isDismissed = incoming && record.channel === "email" && record.resolution === "no_reply_needed";
+      const isReplied = incoming && record.channel === "email" && !isOpen && !isDismissed;
+      const canReopen = isDismissed && (!repliedAt || record.contacted_at > repliedAt);
+      const resolving = resolvingId === record.id;
       return <details className={`correspondence-entry ${isNote ? "note" : incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
           <span className="correspondence-avatar" aria-hidden="true">{isNote ? <MessageCircle size={17} /> : incoming ? <Mail size={17} /> : <Send size={16} />}</span>
           <span className="correspondence-summary-copy">
-            <span className="correspondence-kicker"><b>{isNote ? "Note" : incoming ? "Incoming" : "Sent"}</b><span>{isNote ? `Added by ${from}` : incoming ? from : `To ${to}`}</span></span>
+            <span className="correspondence-kicker"><b>{isNote ? "Note" : incoming ? "Incoming" : "Sent"}</b><span>{isNote ? `Added by ${from}` : incoming ? from : `To ${to}`}</span>{isOpen && <em className="reply-chip open">Awaiting reply</em>}{isReplied && <em className="reply-chip replied">Replied</em>}{isDismissed && <em className="reply-chip dismissed">Resolved — no reply needed</em>}</span>
             <strong>{record.subject || `${isNote ? "Internal" : incoming ? "Incoming" : "Sent"} ${record.channel}`}</strong>
             <small className="correspondence-preview">{preview || "No message preview available"}</small>
           </span>
@@ -553,6 +593,13 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved }: { scho
             {!isNote && <span><small>To</small><strong>{to}</strong></span>}
           </div>
           <div className="correspondence-body">{record.body}</div>
+          {isOpen && <div className="correspondence-resolve-actions">
+            <button type="button" className="primary-button" onClick={onEmail} disabled={!school.email}><Send size={14} /> Reply by email</button>
+            <button type="button" className="secondary-button" disabled={resolving} onClick={() => setResolution(record, "resolve")}><CheckCircle2 size={14} /> {resolving ? "Saving…" : "Mark resolved — no reply needed"}</button>
+          </div>}
+          {canReopen && <div className="correspondence-resolve-actions">
+            <button type="button" className="secondary-button" disabled={resolving} onClick={() => setResolution(record, "reopen")}><Mail size={14} /> {resolving ? "Saving…" : "Reopen — reply still needed"}</button>
+          </div>}
           <div className="correspondence-status"><span>{record.channel}</span><span>{record.status}</span></div>
         </div>
       </details>;
@@ -704,7 +751,9 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const filtered = useMemo(() => schools.filter((school) => {
     const matchesSearch = `${school.name} ${school.district} ${school.admin} ${school.email} ${school.code} ${school.phone}`.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === "All"
-      || (filter === "Reply needed" ? school.lastMessageDirection === "inbound" : programStageFor(school) === filter);
+      || (filter === "Reply needed" ? school.replyPending
+        : filter === "Flagged for follow-up" ? school.needsFollowUp
+          : school.programStage === filter);
     return matchesSearch && matchesFilter;
   }), [schools, search, filter]);
   const visibleSchools = filtered.slice(0, visibleCount);
@@ -812,8 +861,23 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     attention: sum.attention + (school.email.includes("@") ? 0 : 1),
   }), { orders2026: 0, orders2025: 0, orders2024: 0, attention: 0 }), [schools]);
   const recipientCount = useMemo(() => schools.filter((school) => school.email.includes("@")).length, [schools]);
-  const replyNeededCount = useMemo(() => schools.filter((school) => school.lastMessageDirection === "inbound").length, [schools]);
+  const replyNeededCount = useMemo(() => schools.filter((school) => school.replyPending).length, [schools]);
   const assignedSchoolCodes = useMemo(() => schools.filter((school) => school.code.trim()).length, [schools]);
+
+  const [resolvingSchoolId, setResolvingSchoolId] = useState<number | null>(null);
+  const resolveReplies = useCallback(async (schoolId: number) => {
+    setResolvingSchoolId(schoolId);
+    const response = await fetch("/api/correspondence", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ schoolId, action: "resolve" }),
+    });
+    setResolvingSchoolId(null);
+    if (!response.ok) return;
+    setSchools((current) => current.map((school) => school.id === schoolId ? { ...school, replyPending: false } : school));
+    setSelected((current) => current?.id === schoolId ? { ...current, replyPending: false } : current);
+    setCorrespondenceVersion((version) => version + 1);
+  }, []);
 
   const refreshSchools = useCallback(async () => {
     const response = await fetch("/api/schools");
@@ -893,7 +957,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onStageChanged={(status, outreachStatus) => { const updated = { ...selected, status, outreachStatus: outreachStatus || selected.outreachStatus }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected(updated); }} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected(updated); }} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">
@@ -908,14 +972,14 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         {gmailNotice && <div className="success-banner dismissible"><Mail size={18} /><div><strong>Gmail</strong><span>{gmailNotice}</span></div><button onClick={() => setGmailNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
 
         <section ref={schoolsSectionRef} className="schools-section">
-          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span>{replyNeededCount > 0 && <button className="reply-needed-filter" onClick={() => { setFilter("Reply needed"); setVisibleCount(30); }}><Mail size={14} /> {replyNeededCount} {replyNeededCount === 1 ? "reply" : "replies"} needed</button>}</div><p>See the current program stage, orders, and anything that needs attention.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="School, contact, email, or code" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Stage:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by program stage" value={filter} onChange={(e) => { setFilter(e.target.value as SchoolFilter); setVisibleCount(30); }}><option>All</option><option>Reply needed</option><option>Needs attention</option><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Complete</option></select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>2026 stage</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const stage = programStageFor(school); const reason = attentionReasonFor(school); return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={stage} /></td><td>{school.orders2026 ? <strong className="number-cell">{school.orders2026.toLocaleString()}</strong> : <span className="muted-number">—</span>}</td><td><span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span></td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className={`code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or program stage.</p></div>}</div>
+          <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span>{replyNeededCount > 0 && <button className="reply-needed-filter" onClick={() => { setFilter("Reply needed"); setVisibleCount(30); }}><Mail size={14} /> {replyNeededCount} {replyNeededCount === 1 ? "reply" : "replies"} needed</button>}</div><p>See the current program stage, orders, and anything that needs attention.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="School, contact, email, or code" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Stage:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by program stage" value={filter} onChange={(e) => { setFilter(e.target.value as SchoolFilter); setVisibleCount(30); }}><option>All</option><option>Reply needed</option><option>Flagged for follow-up</option><option>Not invited</option><option>Invited</option><option>Ordered</option><option>Complete</option></select><ChevronDown size={14} /></label></div></div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>2026 stage</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const reasons = attentionReasonsFor(school); const reason = reasons.length > 1 ? `${reasons[0]} · +${reasons.length - 1} more` : reasons[0] || ""; return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={school.programStage} /></td><td>{school.orders2026 ? <strong className="number-cell">{school.orders2026.toLocaleString()}</strong> : <span className="muted-number">—</span>}</td><td>{school.replyPending ? <span className="attention-cell"><span className="attention-reason">{reason}</span><button type="button" className="resolve-button" disabled={resolvingSchoolId === school.id} title="The latest incoming email doesn't need a response" onClick={(event) => { event.stopPropagation(); resolveReplies(school.id); }}><CheckCircle2 size={12} /> {resolvingSchoolId === school.id ? "Resolving…" : "Resolve"}</button></span> : <span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span>}</td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className={`code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or program stage.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
     </div>
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
-    {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, lastMessageDirection: "outbound" as const, status: statusAfterOutbound(emailSchool) }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
+    {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
     {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(code, outreachStatus) => saveSchool(editSchool, code, outreachStatus)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
   </div>;

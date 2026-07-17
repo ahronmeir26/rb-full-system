@@ -15,27 +15,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   const hasCode = body && typeof body.code === "string";
   const hasOutreachStatus = body && typeof body.outreachStatus === "string";
   const hasProgramStage = body && typeof body.programStage === "string";
-  if (!hasCode && !hasOutreachStatus && !hasProgramStage) {
-    return Response.json({ error: "A coupon code, outreach status, or program stage is required." }, { status: 400 });
+  const hasNeedsFollowUp = body && typeof body.needsFollowUp === "boolean";
+  if (!hasCode && !hasOutreachStatus && !hasProgramStage && !hasNeedsFollowUp) {
+    return Response.json({ error: "A coupon code, outreach status, program stage, or follow-up flag is required." }, { status: 400 });
   }
 
   const code = hasCode ? body.code.trim() : "";
   const outreachStatus = hasOutreachStatus ? body.outreachStatus.trim() : "";
   const programStage = hasProgramStage ? body.programStage.trim() : "";
-  const stageUpdates: Record<string, { status: "Not started" | "Ready to order" | "In progress" | "Needs attention" | "Complete"; outreachStatus?: string }> = {
-    "Not invited": { status: "Not started", outreachStatus: "Not contacted" },
-    Invited: { status: "Ready to order", outreachStatus: "Sent invite" },
-    Ordered: { status: "In progress" },
-    "Needs attention": { status: "Needs attention" },
-    Complete: { status: "Complete" },
-  };
+  const programStages = new Set(["Not invited", "Invited", "Ordered", "Complete"]);
   if (hasCode && (code.length > 64 || /[\u0000-\u001f\u007f]/.test(code))) {
     return Response.json({ error: "The coupon code must be 64 characters or fewer." }, { status: 400 });
   }
   if (hasOutreachStatus && (!outreachStatus || outreachStatus.length > 64)) {
     return Response.json({ error: "A valid outreach status is required." }, { status: 400 });
   }
-  if (hasProgramStage && !stageUpdates[programStage]) {
+  if (hasProgramStage && !programStages.has(programStage)) {
     return Response.json({ error: "A valid program stage is required." }, { status: 400 });
   }
 
@@ -67,13 +62,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
     if (!status) return Response.json({ error: "That outreach status does not exist." }, { status: 400 });
   }
 
-  const updates: { code?: string | null; outreach_status?: string; status?: "Not started" | "Ready to order" | "In progress" | "Needs attention" | "Complete" } = {};
+  const updates: { code?: string | null; outreach_status?: string; program_stage?: string; needs_follow_up?: boolean } = {};
   if (hasCode) updates.code = storedCode;
   if (hasOutreachStatus) updates.outreach_status = outreachStatus;
-  if (hasProgramStage) {
-    updates.status = stageUpdates[programStage].status;
-    if (stageUpdates[programStage].outreachStatus) updates.outreach_status = stageUpdates[programStage].outreachStatus;
-  }
+  if (hasProgramStage) updates.program_stage = programStage;
+  if (hasNeedsFollowUp) updates.needs_follow_up = body.needsFollowUp;
   const { data: school, error } = await supabase
     .from("schools")
     .update(updates)
@@ -86,15 +79,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
     return Response.json({ error: "Unable to save the school." }, { status: 500 });
   }
   if (!school) return Response.json({ error: "School not found." }, { status: 404 });
-
-  if (hasProgramStage) {
-    const { error: programError } = await supabase
-      .from("school_programs")
-      .update({ status: stageUpdates[programStage].status })
-      .eq("school_id", schoolId)
-      .eq("program_year", 2026);
-    if (programError) console.error("Unable to synchronize normalized 2026 program stage", programError);
-  }
 
   if (hasCode) {
     const [programResult, statsResult] = await Promise.all([
@@ -136,6 +120,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   return Response.json({
     code: hasCode ? code : undefined,
     outreachStatus: updates.outreach_status,
-    status: updates.status,
+    programStage: updates.program_stage,
+    needsFollowUp: updates.needs_follow_up,
   });
 }

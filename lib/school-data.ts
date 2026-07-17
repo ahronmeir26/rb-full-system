@@ -42,7 +42,7 @@ export async function loadSchools(schoolId?: number): Promise<{ schools: School[
   const supabase = createClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  let query = supabase.from("schools").select("*").order("name");
+  let query = supabase.from("schools_overview").select("*").order("name");
   if (schoolId) query = query.eq("id", schoolId);
   const { data, error } = await query;
   if (error || !data?.length) return { schools: fallbackSchools, source: "workbook" };

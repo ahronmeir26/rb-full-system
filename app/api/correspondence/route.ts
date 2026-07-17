@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("correspondence")
-    .select("id,direction,channel,subject,body,from_email,to_email,status,contacted_at")
+    .select("id,direction,channel,subject,body,from_email,to_email,status,contacted_at,resolved_at,resolution")
     .eq("school_id", schoolId)
     .order("contacted_at", { ascending: false });
   if (error) {
@@ -37,6 +37,57 @@ export async function GET(request: Request) {
   }
 
   return Response.json({ correspondence: data });
+}
+
+export async function PATCH(request: Request) {
+  const viewer = await getViewer();
+  if (!viewer) return Response.json({ error: "Authentication required." }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const schoolId = Number(body?.schoolId);
+  if (!Number.isInteger(schoolId) || schoolId < 1) {
+    return Response.json({ error: "A valid school is required." }, { status: 400 });
+  }
+  if (body?.action !== "resolve") {
+    return Response.json({ error: "The action must be resolve." }, { status: 400 });
+  }
+
+  const supabase = serviceClient();
+  if (!supabase) return Response.json({ error: "Correspondence requires a Supabase connection." }, { status: 503 });
+
+  // Only dismiss messages that are actually open: unresolved inbound emails
+  // newer than the last real outbound email. Older unresolved inbound rows are
+  // already closed by that reply, and anything arriving later stays open.
+  const { data: latestOutbound, error: outboundError } = await supabase
+    .from("correspondence")
+    .select("contacted_at")
+    .eq("school_id", schoolId)
+    .eq("direction", "outbound")
+    .eq("channel", "email")
+    .not("status", "in", "(draft,failed)")
+    .order("contacted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (outboundError) {
+    console.error("Unable to load the latest outbound email", outboundError);
+    return Response.json({ error: "Unable to resolve the incoming emails." }, { status: 500 });
+  }
+
+  let update = supabase
+    .from("correspondence")
+    .update({ resolved_at: new Date().toISOString(), resolved_by: viewer.id, resolution: "no_reply_needed" })
+    .eq("school_id", schoolId)
+    .eq("direction", "inbound")
+    .eq("channel", "email")
+    .is("resolved_at", null);
+  if (latestOutbound) update = update.gt("contacted_at", latestOutbound.contacted_at);
+  const { data: resolved, error } = await update.select("id");
+  if (error) {
+    console.error("Unable to resolve the incoming emails", error);
+    return Response.json({ error: "Unable to resolve the incoming emails." }, { status: 500 });
+  }
+
+  return Response.json({ resolved: resolved?.length ?? 0 });
 }
 
 export async function POST(request: Request) {
@@ -69,7 +120,7 @@ export async function POST(request: Request) {
         contacted_at: contactedAt,
         created_by: viewer.id,
       })
-      .select("id,direction,channel,subject,body,from_email,to_email,status,contacted_at")
+      .select("id,direction,channel,subject,body,from_email,to_email,status,contacted_at,resolved_at,resolution")
       .single();
     if (error) {
       console.error("Unable to save school note", error);

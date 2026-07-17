@@ -75,7 +75,7 @@ test("database schema covers the complete school-program workflow", async () => 
   assert.match(schema, /delete from public\.user_profiles where role = 'school_admin'/);
   assert.match(schema, /update public\.user_profiles set role = 'admin' where role = 'program_admin'/);
   assert.match(schema, /check \(role = 'admin'\)/);
-  assert.match(loader, /from\("schools"\)\.select\("\*"\)/);
+  assert.match(loader, /from\("schools_overview"\)\.select\("\*"\)/);
   assert.match(importer, /school_type: school\.schoolType \|\| "regular"/);
   assert.match(schema, /create or replace function public\.sync_schools_id_sequence\(\)/);
   assert.match(schema, /pg_catalog\.setval\([\s\S]*sequence_name::regclass/);
@@ -194,7 +194,9 @@ test("new Supabase schools map missing optional fields to empty values", () => {
   assert.equal(school.city, "");
   assert.equal(school.email, "");
   assert.equal(school.initials, "VA");
-  assert.equal(school.status, "Not started");
+  assert.equal(school.programStage, "Not invited");
+  assert.equal(school.replyPending, false);
+  assert.equal(school.needsFollowUp, false);
 });
 
 test("supports custom outreach statuses and complete contact history", async () => {
@@ -244,11 +246,12 @@ test("filters the school list by current program stage", async () => {
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(editor, /programStageFor\(school\) === filter/);
+  assert.match(editor, /school\.programStage === filter/);
   assert.match(editor, /<span>Stage:<\/span>/);
   assert.match(editor, /className="filter-select-value">\{filter\}<\/span>/);
   assert.match(editor, /aria-label="Filter by program stage"/);
-  assert.match(editor, /<option>Needs attention<\/option>/);
+  assert.match(editor, /<option>Flagged for follow-up<\/option>/);
+  assert.match(editor, /<option>Reply needed<\/option>/);
   assert.match(styles, /\.filter-select select \{ position: absolute; inset: 0; width: 100%; height: 100%;/);
 });
 
