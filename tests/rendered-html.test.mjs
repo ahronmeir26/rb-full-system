@@ -187,6 +187,13 @@ test("school details participate in browser back and forward navigation", async 
   assert.match(editor, /returningSchoolIdRef/);
 });
 
+test("overview omits the bulk and shortcut email buttons", async () => {
+  const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(editor, /Email one school/);
+  assert.doesNotMatch(editor, /Email every school/);
+  assert.doesNotMatch(editor, /BulkEmailModal/);
+});
+
 test("generates a four-page appreciation order form for a school's coupon code", async () => {
   const template = await readFile(new URL("../assets/forms/ai-stone-appreciation-order-form-template.pdf", import.meta.url));
   const customized = await customizeAppreciationOrderForm(template, "PESACH26-TEST");

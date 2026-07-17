@@ -19,7 +19,6 @@ import {
   Send,
   Settings,
   ShoppingBag,
-  UsersRound,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -184,70 +183,46 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
   );
 }
 
-function BulkEmailModal({ schools, onClose, onSent }: { schools: School[]; onClose: () => void; onSent: () => void }) {
-  const recipientSchools = schools.filter((school) => school.email.includes("@"));
-  const recipientCount = recipientSchools.length;
-  const [subject, setSubject] = useState("Your school is invited to the 2026 Teacher Appreciation Program");
-  const [message, setMessage] = useState("Hello,\n\nHere is the 2026 Teacher Appreciation Program information for your school and the next steps.\n\nBest,\nProgram Team");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function send() {
-    setLoading(true);
-    setError("");
-    const response = await fetch("/api/correspondence", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ schoolIds: recipientSchools.map((school) => school.id), subject, message }),
-    });
-    const result = await response.json().catch(() => null);
-    setLoading(false);
-    if (!response.ok) {
-      setError(result?.error || "Unable to record the emails.");
-      return;
-    }
-    onSent();
-  }
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Email every school" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="modal-head">
-          <div><p className="eyebrow">Program-wide email</p><h2>Email every school</h2></div>
-          <button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button>
-        </div>
-        <div className="compose-row"><span>To</span><strong>{recipientCount.toLocaleString()} school contacts with email addresses</strong></div>
-        <label className="compose-field"><span>Subject</span><input value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
-        <label className="compose-field message-field"><span>Message</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} /></label>
-        <p className="bulk-note">Each administrator receives an individual email. Addresses are never shown to other schools.</p>
-        {error && <div className="login-error" role="alert">{error}</div>}
-        <div className="modal-actions">
-          <button className="secondary-button" onClick={onClose}>Save draft</button>
-          <button className="primary-button" onClick={send} disabled={loading || !recipientCount || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Recording…" : `Send ${recipientCount.toLocaleString()} emails`}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SchoolDetail({ school, correspondenceVersion, onBack, onEmail, onEdit }: { school: School; correspondenceVersion: number; onBack: () => void; onEmail: () => void; onEdit: () => void }) {
+  const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
+
   return (
     <main className="content detail-content">
       <button className="back-link" onClick={onBack}><ArrowLeft size={16} /> All schools</button>
       <div className="detail-hero">
-        <div className="detail-title"><Avatar school={school} /><div><div className="title-line"><h1>{school.name}</h1><span className={`status ${statusClass(school.status)}`}>{school.status}</span></div><p>{[school.district, [school.city, school.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Location not provided"} · <span className="code">{school.code || "2026 code not assigned"}</span></p></div></div>
+        <div className="detail-title">
+          <Avatar school={school} />
+          <div className="detail-title-copy">
+            <div className="title-line"><h1>{school.name}</h1><span className={`status ${statusClass(school.status)}`}>{school.status}</span></div>
+            <div className="detail-meta">
+              <span>{[school.district, location].filter(Boolean).join(" · ")}</span>
+              <span className={`detail-code ${school.code ? "" : "unassigned"}`}><span>2026 code</span>{school.code || "Not assigned"}</span>
+            </div>
+          </div>
+        </div>
         <div className="detail-actions"><button className="secondary-button" onClick={onEdit}><Pencil size={16} /> Edit school</button><OrderFormDownload school={school} /><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={16} /> Email administrator</button></div>
       </div>
       <div className="school-correspondence-layout">
         <Correspondence school={school} refreshVersion={correspondenceVersion} onEmail={onEmail} />
-        <aside className="panel school-data-panel">
-          <div><span>Outreach status</span><strong><span className="outreach-pill">{school.outreachStatus}</span></strong></div>
-          <div><span>Last contacted</span><strong>{school.lastContactedAt ? new Date(school.lastContactedAt).toLocaleString() : "No contact recorded"}</strong></div>
-          <div><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
-          <div><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
-          <div><span>Location</span><strong>{[school.city, school.state].filter(Boolean).join(", ") || "Not provided"}</strong></div>
-          <div className="school-year-row"><span>2026</span><strong>{school.orders2026.toLocaleString()} orders</strong><small>{school.code || "Code not assigned"}</small></div>
-          <div className="school-year-row"><span>2025</span><strong>{school.orders2025.toLocaleString()} orders</strong><small>{school.code2025 || "Code not provided"}</small></div>
-          <div className="school-year-row"><span>2024</span><strong>{school.orders2024.toLocaleString()} orders</strong><small>{school.code2024 || "Code not provided"}</small></div>
+        <aside className="detail-sidebar" aria-label="School details">
+          <section className="panel school-summary-panel">
+            <div className="sidebar-panel-heading"><p className="eyebrow">School details</p><h2>At a glance</h2></div>
+            <div className="school-data-grid">
+              <div className="school-data-item"><span>Outreach status</span><strong><span className="outreach-pill">{school.outreachStatus}</span></strong></div>
+              <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? new Date(school.lastContactedAt).toLocaleDateString() : "No contact recorded"}</strong></div>
+              <div className="school-data-item school-data-wide"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
+              <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
+              <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
+            </div>
+          </section>
+          <section className="panel school-orders-panel">
+            <div className="sidebar-panel-heading"><p className="eyebrow">Program activity</p><h2>Order history</h2></div>
+            <div className="school-year-list">
+              <div className="school-year-row"><span>2026</span><strong>{school.orders2026.toLocaleString()} <small>orders</small></strong><code>{school.code || "Code not assigned"}</code></div>
+              <div className="school-year-row"><span>2025</span><strong>{school.orders2025.toLocaleString()} <small>orders</small></strong><code>{school.code2025 || "Code not provided"}</code></div>
+              <div className="school-year-row"><span>2024</span><strong>{school.orders2024.toLocaleString()} <small>orders</small></strong><code>{school.code2024 || "Code not provided"}</code></div>
+            </div>
+          </section>
         </aside>
       </div>
     </main>
@@ -274,8 +249,8 @@ function Correspondence({ school, refreshVersion, onEmail }: { school: School; r
   }, [school.id, refreshVersion]);
 
   return <section className="panel tab-panel correspondence">
-    <div className="panel-heading"><div><p className="eyebrow">Complete history</p><h2>Correspondence with {school.admin || school.name}</h2></div><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={16} /> New email</button></div>
-    {loading ? <div className="empty-panel"><Clock3 size={26} /><strong>Loading correspondence…</strong></div> : records.length ? <div className="correspondence-list">{records.map((record) => <article className="correspondence-entry" key={record.id}><div><span className="outreach-pill">{record.channel}</span><time>{new Date(record.contacted_at).toLocaleString()}</time></div><strong>{record.subject || `${record.direction} ${record.channel}`}</strong><p>{record.body}</p><small>{record.direction === "outbound" ? `To ${record.to_email || "school contact"}` : `From ${record.from_email || "school contact"}`} · {record.status}</small></article>)}</div> : <div className="empty-panel"><Mail size={26} /><strong>No correspondence recorded</strong><p>Every email, phone call, and note recorded for this school will appear here.</p></div>}
+    <div className="panel-heading correspondence-heading"><div><p className="eyebrow">Complete history</p><h2>Correspondence with {school.admin || school.name}</h2><p className="panel-description">Emails, phone calls, and notes for this school, all in one timeline.</p></div><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={18} /> New email</button></div>
+    {loading ? <div className="empty-panel"><span className="empty-panel-icon"><Clock3 size={28} /></span><strong>Loading correspondence…</strong></div> : records.length ? <div className="correspondence-list">{records.map((record) => <article className="correspondence-entry" key={record.id}><div><span className="outreach-pill">{record.channel}</span><time>{new Date(record.contacted_at).toLocaleString()}</time></div><strong>{record.subject || `${record.direction} ${record.channel}`}</strong><p>{record.body}</p><small>{record.direction === "outbound" ? `To ${record.to_email || "school contact"}` : `From ${record.from_email || "school contact"}`} · {record.status}</small></article>)}</div> : <div className="empty-panel"><span className="empty-panel-icon"><Mail size={28} /></span><strong>No correspondence recorded</strong><p>Once you send an email or log a call, the complete conversation history will appear here.</p><button className="secondary-button empty-panel-action" onClick={onEmail} disabled={!school.email}><Mail size={17} /> Start a conversation</button></div>}
   </section>;
 }
 
@@ -333,7 +308,6 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [selected, setSelected] = useState<School | null>(null);
   const [editSchool, setEditSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
-  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<"overview" | "discounts">("overview");
   const [sent, setSent] = useState(false);
@@ -470,7 +444,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       </header>
 
       {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onEdit={() => setEditSchool(selected)} /> : <main className="content">
-        <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div><div className="heading-actions"><button className="secondary-button" onClick={() => schools[0] && setEmailSchool(schools[0])}><Mail size={16} /> Email one school</button><button className="primary-button" onClick={() => setBulkEmailOpen(true)}><UsersRound size={16} /> Email every school</button></div></div>
+        <div className="page-heading"><div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p><span className="source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import · Supabase ready"}</span></div></div>
 
         {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
 
@@ -493,7 +467,6 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       </main>}
     </div>
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
-    {bulkEmailOpen && <BulkEmailModal schools={schools} onClose={() => setBulkEmailOpen(false)} onSent={() => { setBulkEmailOpen(false); setSent(true); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} />}
     {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(code, outreachStatus) => saveSchool(editSchool, code, outreachStatus)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
   </div>;
