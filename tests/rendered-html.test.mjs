@@ -6,7 +6,7 @@ import { customizeAppreciationOrderForm } from "../lib/appreciation-order-form.t
 import { mapSchool } from "../lib/map-school.ts";
 import { outreachStatusTone } from "../lib/outreach-status.ts";
 import { initial2026SchoolCode } from "../lib/school-code.ts";
-import { createSchoolUploadToken, parseSchoolUploadToken } from "../lib/school-upload.ts";
+import { createSchoolUploadToken, parseSchoolUploadToken, verifySchoolUploadToken } from "../lib/school-upload.ts";
 import { cartLinesDiscountsGenerateRun } from "../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.js";
 
 async function render() {
@@ -93,10 +93,13 @@ test("creates passwordless upload links bound to a school's coupon code", async 
   const previousSecret = process.env.SCHOOL_UPLOAD_LINK_SECRET;
   process.env.SCHOOL_UPLOAD_LINK_SECRET = "test-only-school-upload-secret";
   try {
-    const token = await createSchoolUploadToken("  school-2026  ", 3);
-    assert.deepEqual(await parseSchoolUploadToken(token), { couponCode: "SCHOOL-2026", version: 3 });
+    const token = await createSchoolUploadToken(47, "  school-2026  ", 3);
+    assert.ok(token.length <= 26);
+    assert.equal((await parseSchoolUploadToken(token))?.schoolId, 47);
+    assert.equal(await verifySchoolUploadToken(token, "SCHOOL-2026", 3), true);
+    assert.equal(await verifySchoolUploadToken(token, "OTHER-CODE", 3), false);
     const tampered = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
-    assert.equal(await parseSchoolUploadToken(tampered), null);
+    assert.equal(await verifySchoolUploadToken(tampered, "SCHOOL-2026", 3), false);
   } finally {
     if (previousSecret === undefined) delete process.env.SCHOOL_UPLOAD_LINK_SECRET;
     else process.env.SCHOOL_UPLOAD_LINK_SECRET = previousSecret;

@@ -16,52 +16,47 @@ function base64Url(bytes: Uint8Array) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function fromBase64Url(value: string) {
-  const base64 = value.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-  try {
-    const binary = atob(base64);
-    return new Uint8Array([...binary].map((character) => character.charCodeAt(0)));
-  } catch {
-    return null;
-  }
-}
-
 async function hmacKey() {
   const secret = uploadSecret();
   if (!secret) return null;
   return crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-export async function createSchoolUploadToken(couponCode: string, version: number) {
+function tokenPayload(schoolId: number, couponCode: string, version: number) {
+  return `${schoolId}:${couponCode.trim().toUpperCase()}:${version}`;
+}
+
+export async function createSchoolUploadToken(schoolId: number, couponCode: string, version: number) {
   const key = await hmacKey();
   if (!key) throw new Error("School upload links are not configured.");
   const normalizedCode = couponCode.trim().toUpperCase();
+  if (!Number.isSafeInteger(schoolId) || schoolId < 1) throw new Error("A valid school is required for an upload link.");
   if (!normalizedCode) throw new Error("A coupon code is required for a school upload link.");
-  const encodedCode = base64Url(encoder.encode(normalizedCode));
-  const payload = `${encodedCode}.${version}`;
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return `${payload}.${base64Url(new Uint8Array(signature))}`;
+  if (!Number.isSafeInteger(version) || version < 1) throw new Error("A valid upload link version is required.");
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(tokenPayload(schoolId, normalizedCode, version)));
+  const compactSignature = base64Url(new Uint8Array(signature).slice(0, 16));
+  return `${schoolId.toString(36)}-${compactSignature}`;
 }
 
 export async function parseSchoolUploadToken(token: string) {
-  const match = /^([A-Za-z0-9_-]{1,128})\.(\d+)\.([A-Za-z0-9_-]{43})$/.exec(token);
+  const match = /^([1-9a-z][0-9a-z]*)-([A-Za-z0-9_-]{22})$/.exec(token);
   if (!match) return null;
-  const version = Number(match[2]);
-  const codeBytes = fromBase64Url(match[1]);
-  const couponCode = codeBytes ? new TextDecoder().decode(codeBytes) : "";
-  if (!couponCode || couponCode.length > 64 || !Number.isSafeInteger(version) || version < 1) return null;
+  const schoolId = Number.parseInt(match[1], 36);
+  if (!Number.isSafeInteger(schoolId) || schoolId < 1) return null;
+  return { schoolId, signature: match[2] };
+}
 
-  const key = await hmacKey();
-  if (!key) return null;
-  const expected = await crypto.subtle.sign("HMAC", key, encoder.encode(`${match[1]}.${version}`));
-  const expectedSignature = base64Url(new Uint8Array(expected));
-  if (expectedSignature.length !== match[3].length) return null;
+export async function verifySchoolUploadToken(token: string, couponCode: string, version: number) {
+  const parsed = await parseSchoolUploadToken(token);
+  if (!parsed) return false;
+  const expectedToken = await createSchoolUploadToken(parsed.schoolId, couponCode, version).catch(() => "");
+  if (expectedToken.length !== token.length) return false;
 
   let mismatch = 0;
-  for (let index = 0; index < expectedSignature.length; index += 1) {
-    mismatch |= expectedSignature.charCodeAt(index) ^ match[3].charCodeAt(index);
+  for (let index = 0; index < expectedToken.length; index += 1) {
+    mismatch |= expectedToken.charCodeAt(index) ^ token.charCodeAt(index);
   }
-  return mismatch === 0 ? { couponCode, version } : null;
+  return mismatch === 0;
 }
 
 export function schoolUploadAdminClient() {
@@ -79,10 +74,11 @@ export async function getSchoolForUploadToken(token: string) {
   const { data: school, error } = await supabase
     .from("schools")
     .select("id,name,code,upload_link_version")
-    .ilike("code", parsed.couponCode)
-    .eq("upload_link_version", parsed.version)
+    .eq("id", parsed.schoolId)
     .maybeSingle();
   if (error || !school) return null;
+  const valid = await verifySchoolUploadToken(token, String(school.code || ""), Number(school.upload_link_version));
+  if (!valid) return null;
   return { id: Number(school.id), name: String(school.name), code: String(school.code), version: Number(school.upload_link_version) };
 }
 

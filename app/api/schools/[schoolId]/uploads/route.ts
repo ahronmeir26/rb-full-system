@@ -7,8 +7,8 @@ function schoolIdFrom(value: string) {
   return Number.isSafeInteger(schoolId) && schoolId > 0 ? schoolId : null;
 }
 
-async function uploadLink(request: Request, code: string, version: number) {
-  const token = await createSchoolUploadToken(code, version);
+async function uploadLink(request: Request, schoolId: number, code: string, version: number) {
+  const token = await createSchoolUploadToken(schoolId, code, version);
   return appUrl(`/upload/${token}`, request).toString();
 }
 
@@ -51,7 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ schoolI
   }));
   const code = String(school.code || "").trim();
   return Response.json({
-    uploadLink: code ? await uploadLink(request, code, Number(school.upload_link_version || 1)) : null,
+    uploadLink: code ? await uploadLink(request, schoolId, code, Number(school.upload_link_version || 1)) : null,
     requiresCouponCode: !code,
     files,
   });
@@ -88,5 +88,5 @@ export async function POST(request: Request, context: { params: Promise<{ school
     console.error("Unable to rotate school upload link", error);
     return Response.json({ error: "The link changed at the same time. Refresh and try again." }, { status: 409 });
   }
-  return Response.json({ uploadLink: await uploadLink(request, code, Number(updated.upload_link_version)) });
+  return Response.json({ uploadLink: await uploadLink(request, schoolId, code, Number(updated.upload_link_version)) });
 }
