@@ -650,11 +650,7 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
   const [loading, setLoading] = useState(true);
   const [addingNote, setAddingNote] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const noteCount = records.filter((record) => record.channel === "note").length;
-  const incomingCount = records.filter((record) => record.direction === "inbound" && record.channel !== "note").length;
-  const outgoingCount = records.length - incomingCount - noteCount;
   const repliedAt = latestOutboundAt(records);
-  const awaitingCount = records.filter((record) => awaitingReply(record, repliedAt)).length;
 
   async function setResolution(record: CorrespondenceRecord, action: "resolve" | "reopen") {
     setResolvingId(record.id);
@@ -688,14 +684,7 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
   }, [school.id, refreshVersion]);
 
   return <section className="panel tab-panel correspondence">
-    <div className="panel-heading correspondence-heading"><div><p className="eyebrow">Complete history</p><h2>Correspondence with {school.admin || school.name}</h2><p className="panel-description">Incoming and sent emails, phone calls, and notes for this school. Select a message to expand it.</p></div><div className="correspondence-actions"><button className="secondary-button" onClick={() => setAddingNote(true)}><Plus size={17} /> Add note</button><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={18} /> New email</button></div></div>
-    {!loading && records.length > 0 && <div className="correspondence-overview" aria-label="Correspondence totals">
-      <span><i><MessageCircle size={15} /></i><small>All messages</small><strong>{records.length.toLocaleString()}</strong></span>
-      <span className="incoming"><i><Mail size={15} /></i><small>Incoming</small><strong>{incomingCount.toLocaleString()}</strong></span>
-      {awaitingCount > 0 && <span className="awaiting"><i><Clock3 size={15} /></i><small>Awaiting reply</small><strong>{awaitingCount.toLocaleString()}</strong></span>}
-      <span className="outgoing"><i><Send size={14} /></i><small>Sent</small><strong>{outgoingCount.toLocaleString()}</strong></span>
-      <span className="note"><i><MessageCircle size={15} /></i><small>Notes</small><strong>{noteCount.toLocaleString()}</strong></span>
-    </div>}
+    <div className="panel-heading correspondence-heading"><div><h2>Correspondence with {school.admin || school.name}</h2><p className="panel-description">Incoming and sent emails, phone calls, and notes for this school. Select a message to expand it.</p></div><div className="correspondence-actions"><button className="secondary-button" onClick={() => setAddingNote(true)}><Plus size={17} /> Add note</button><button className="primary-button" onClick={onEmail} disabled={!school.email}><Mail size={18} /> New email</button></div></div>
     {loading ? <div className="empty-panel"><span className="empty-panel-icon"><Clock3 size={28} /></span><strong>Loading correspondence…</strong></div> : records.length ? <div className="correspondence-list">{records.map((record) => {
       const incoming = record.direction === "inbound";
       const isNote = record.channel === "note";
@@ -1078,7 +1067,6 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     <div className="main-shell">
       <header className="topbar">
         <Logo />
-        <label className="topbar-search"><Search size={17} /><input aria-label="Global search" placeholder="Search schools, admins, or forms…" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /><kbd>⌘ K</kbd></label>
         <div className="topbar-actions">
           <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={toggleDiscounts}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
           <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
