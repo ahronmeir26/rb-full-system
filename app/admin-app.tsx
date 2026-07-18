@@ -659,13 +659,15 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
       <div className="detail-hero">
         <div className="detail-toolbar">
           <button className="back-link" onClick={onBack}><ArrowLeft size={15} /><span>All schools</span></button>
-          <button type="button" className="secondary-button" onClick={onEdit}><Pencil size={15} /> Edit school info</button>
         </div>
         <div className="detail-identity">
           <div className="detail-title-copy">
             <div className="detail-primary-row">
               <div className="detail-name-block">
-                <div className="title-line"><h1>{school.name}</h1></div>
+                <div className="title-line">
+                  <h1>{school.name}</h1>
+                  <button type="button" className="edit-school-button" onClick={onEdit} aria-label="Edit school info" title="Edit school info"><Pencil size={16} /></button>
+                </div>
                 <p className="detail-location"><Building2 size={14} aria-hidden="true" /><span>{[school.district, location].filter(Boolean).join(" · ")}</span></p>
               </div>
               <div className="detail-header-actions"><dl className="detail-facts">
