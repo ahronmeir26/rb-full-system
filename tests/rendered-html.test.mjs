@@ -6,6 +6,7 @@ import { customizeAppreciationOrderForm } from "../lib/appreciation-order-form.t
 import { mapSchool } from "../lib/map-school.ts";
 import { outreachStatusTone } from "../lib/outreach-status.ts";
 import { initial2026SchoolCode } from "../lib/school-code.ts";
+import { createSchoolUploadToken, parseSchoolUploadToken } from "../lib/school-upload.ts";
 import { cartLinesDiscountsGenerateRun } from "../shopify/extensions/appreciation-product-discounts/src/cart_lines_discounts_generate_run.js";
 
 async function render() {
@@ -83,6 +84,23 @@ test("database schema covers the complete school-program workflow", async () => 
   assert.match(importer, /program_year: 2026/);
   assert.match(importer, /program_year: 2025/);
   assert.match(importer, /program_year: 2024/);
+  assert.match(schema, /upload_link_version integer not null default 1/);
+  assert.match(schema, /'school-form-uploads'/);
+  assert.match(schema, /file_size_limit = excluded\.file_size_limit/);
+});
+
+test("creates passwordless upload links bound to a school's coupon code", async () => {
+  const previousSecret = process.env.SCHOOL_UPLOAD_LINK_SECRET;
+  process.env.SCHOOL_UPLOAD_LINK_SECRET = "test-only-school-upload-secret";
+  try {
+    const token = await createSchoolUploadToken("  school-2026  ", 3);
+    assert.deepEqual(await parseSchoolUploadToken(token), { couponCode: "SCHOOL-2026", version: 3 });
+    const tampered = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
+    assert.equal(await parseSchoolUploadToken(tampered), null);
+  } finally {
+    if (previousSecret === undefined) delete process.env.SCHOOL_UPLOAD_LINK_SECRET;
+    else process.env.SCHOOL_UPLOAD_LINK_SECRET = previousSecret;
+  }
 });
 
 test("stores and manages the shared 2026 Shopify discount program", async () => {

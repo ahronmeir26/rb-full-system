@@ -38,6 +38,7 @@ create table if not exists public.schools (
   last_contact text,
   initials text,
   color text,
+  upload_link_version integer not null default 1 check (upload_link_version > 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -95,6 +96,13 @@ alter table public.schools
   check (school_type in ('regular', 'chassidish'));
 alter table public.schools add column if not exists outreach_status text;
 alter table public.schools add column if not exists last_contacted_at timestamptz;
+alter table public.schools add column if not exists upload_link_version integer;
+update public.schools set upload_link_version = 1 where upload_link_version is null;
+alter table public.schools alter column upload_link_version set default 1;
+alter table public.schools alter column upload_link_version set not null;
+alter table public.schools drop constraint if exists schools_upload_link_version_check;
+alter table public.schools
+  add constraint schools_upload_link_version_check check (upload_link_version > 0);
 
 create table if not exists public.school_outreach_statuses (
   name text primary key check (btrim(name) <> ''),
@@ -319,6 +327,29 @@ create table if not exists public.form_submissions (
 
 create index if not exists form_submissions_school_status_idx
   on public.form_submissions (school_id, status);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'school-form-uploads',
+  'school-form-uploads',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg',
+    'image/png',
+    'image/heic',
+    'image/heif'
+  ]
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.correspondence (
   id uuid primary key default gen_random_uuid(),
@@ -665,6 +696,7 @@ comment on table public.school_year_stats is 'Normalized yearly school codes and
 comment on table public.discount_programs is 'Shared Shopify discount configuration for each Appreciation Program year.';
 comment on table public.discount_school_codes is 'Per-school redeem-code synchronization state for a yearly Shopify discount.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
+comment on table public.form_submissions is 'Files submitted through each school''s signed private upload link.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';
 comment on view public.schools_overview is 'Schools plus the derived reply_pending flag: any unresolved inbound email without a later non-failed outbound email.';
 comment on table public.gmail_connections is 'Encrypted read-only Gmail connections and incremental synchronization state.';

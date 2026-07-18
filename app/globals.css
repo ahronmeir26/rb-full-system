@@ -498,7 +498,37 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .school-year-row > strong { color: #303835; font-size: 19px; letter-spacing: -.025em; }
 .school-year-row > strong small { color: #737d79; font-size: 10px; font-weight: 600; letter-spacing: 0; }
 .school-year-row code { max-width: 135px; overflow: hidden; color: #616d68; font-family: var(--font-geist-mono), monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.school-contacts-panel, .shopify-orders-panel { padding: 24px; }
+.school-contacts-panel, .shopify-orders-panel, .school-forms-panel { padding: 24px; }
+.school-forms-heading { margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.school-forms-heading .eyebrow { margin-bottom: 5px; font-size: 10px; }
+.school-forms-heading h2 { margin: 0; letter-spacing: -.025em; font-size: 21px; }
+.forms-refresh-button { width: 31px; height: 31px; border: 1px solid var(--line); border-radius: 7px; display: grid; place-items: center; color: #65716c; background: #fff; cursor: pointer; }
+.forms-refresh-button:hover { background: #f8f5f3; }
+.forms-loading { margin: 0; padding: 18px 0; border-top: 1px solid var(--line-soft); color: #75807b; font-size: 10px; }
+.upload-link-missing { padding: 13px; border: 1px solid #e5d2b1; border-radius: 8px; display: flex; align-items: flex-start; gap: 10px; color: #785b26; background: #fbf5e8; }
+.upload-link-missing p { margin: 0; display: grid; gap: 4px; }
+.upload-link-missing strong { font-size: 11px; }
+.upload-link-missing span { line-height: 1.4; font-size: 9px; }
+.school-upload-link-box { padding: 13px; border: 1px solid #ccdceb; border-radius: 9px; background: #f2f7fb; }
+.school-upload-link-box > label { display: block; margin-bottom: 7px; color: #526272; text-transform: uppercase; letter-spacing: .06em; font-size: 8px; font-weight: 760; }
+.school-upload-link-box > div { display: flex; }
+.school-upload-link-box input { min-width: 0; width: 100%; height: 34px; padding: 0 9px; border: 1px solid #c8d5e0; border-right: 0; border-radius: 7px 0 0 7px; outline: 0; color: #465765; background: #fff; font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.school-upload-link-box > div button { min-width: 68px; padding: 0 8px; border: 1px solid #9fb7ca; border-radius: 0 7px 7px 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: #3c566d; background: #e4eef6; cursor: pointer; font-size: 9px; font-weight: 750; }
+.school-upload-link-box > span { margin-top: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.school-upload-link-box > span a, .school-upload-link-box > span button { padding: 0; border: 0; display: inline-flex; align-items: center; gap: 4px; color: #4a657c; background: transparent; cursor: pointer; text-decoration: none; font-size: 9px; font-weight: 700; }
+.school-upload-link-box > span a:hover, .school-upload-link-box > span button:hover { text-decoration: underline; }
+.school-form-list-heading { margin-top: 18px; padding-bottom: 9px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; }
+.school-form-list-heading strong { color: #4b5551; font-size: 10px; }
+.school-form-list-heading span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; color: #526270; background: #e9f0f6; font-size: 8px; font-weight: 750; }
+.school-form-list > a { min-height: 60px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
+.school-form-list > a:last-child { border-bottom: 0; }
+.school-form-list > a[aria-disabled="true"] { pointer-events: none; opacity: .65; }
+.school-form-list > a > span { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 7px; display: grid; place-items: center; color: #526a7e; background: #e9f1f7; }
+.school-form-list > a > p { min-width: 0; margin: 0; flex: 1; display: grid; gap: 4px; }
+.school-form-list > a strong { overflow: hidden; color: #333c38; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.school-form-list > a small { color: #77817d; font-size: 8px; }
+.school-form-list > a > svg { color: #7a8580; }
+.no-school-forms { margin: 0; padding: 20px 0 4px; display: grid; justify-items: center; gap: 8px; color: #87908c; font-size: 9px; }
 .contact-list { border-top: 1px solid var(--line-soft); }
 .contact-list-item { min-height: 67px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .contact-list-item > div { min-width: 0; display: grid; gap: 3px; }
@@ -522,6 +552,52 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .order-summary strong { font-size: 11px; }
 .order-summary small { overflow: hidden; color: #74807b; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .order-summary > span { max-width: 95px; padding: 4px 6px; border-radius: 999px; overflow: hidden; color: #286648; background: #e0f0e6; font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+.school-upload-page { min-height: 100vh; padding: clamp(22px, 5vw, 64px) 18px; display: grid; place-items: center; background: radial-gradient(circle at top, #f7f3f0 0, var(--canvas) 55%, #e8ddd7 100%); }
+.school-upload-card { width: min(580px, 100%); border: 1px solid #d8d1cd; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 24px 70px rgba(64, 50, 43, .12); }
+.school-upload-brand { min-height: 82px; padding: 16px 28px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fcfbfa; }
+.school-upload-brand img { width: 168px; height: 39px; object-fit: cover; border-radius: 4px; }
+.school-upload-brand span { color: #69736f; text-transform: uppercase; letter-spacing: .09em; font-size: 8px; font-weight: 760; }
+.school-upload-heading { padding: 31px 34px 0; text-align: center; }
+.school-upload-heading p { margin: 0 0 8px; color: #52687a; text-transform: uppercase; letter-spacing: .11em; font-size: 9px; font-weight: 780; }
+.school-upload-heading h1 { margin: 0; color: #2d3432; letter-spacing: -.04em; font-size: 31px; }
+.school-upload-heading > span { max-width: 430px; margin: 10px auto 0; display: block; color: #737d79; line-height: 1.5; font-size: 12px; }
+.school-upload-form { padding: 25px 34px 31px; }
+.school-upload-context { margin-bottom: 15px; padding: 12px 14px; border-radius: 9px; display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; background: #f4f1ef; }
+.school-upload-context > span { grid-column: 1 / -1; color: #808985; text-transform: uppercase; letter-spacing: .07em; font-size: 8px; font-weight: 760; }
+.school-upload-context strong { overflow: hidden; color: #3b4440; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.school-upload-context small { color: #69746f; font-family: var(--font-geist-mono), monospace; font-size: 9px; }
+.school-upload-dropzone { width: 100%; min-height: 195px; padding: 24px; border: 1.5px dashed #b7c5d1; border-radius: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: #394844; background: #f8fbfd; cursor: pointer; transition: 150ms ease; }
+.school-upload-dropzone:hover, .school-upload-dropzone.dragging { border-color: #728fa7; background: #edf5fa; transform: translateY(-1px); }
+.school-upload-icon { width: 48px; height: 48px; margin-bottom: 7px; border-radius: 13px; display: grid; place-items: center; color: #415e75; background: #dcebf6; }
+.school-upload-dropzone strong { font-size: 13px; }
+.school-upload-dropzone small { color: #71807b; font-size: 10px; }
+.school-upload-dropzone em { margin-top: 7px; color: #89928e; font-size: 8px; font-style: normal; }
+.school-upload-file-list { margin-top: 13px; border: 1px solid var(--line-soft); border-radius: 9px; overflow: hidden; }
+.school-upload-file-list > div { min-height: 57px; padding: 9px 11px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 9px; }
+.school-upload-file-list > div:last-child { border-bottom: 0; }
+.school-upload-file-list > div > span { width: 31px; height: 31px; flex: 0 0 31px; border-radius: 7px; display: grid; place-items: center; color: #4b657a; background: #e9f1f7; }
+.school-upload-file-list p { min-width: 0; margin: 0; flex: 1; display: grid; gap: 3px; }
+.school-upload-file-list strong { overflow: hidden; color: #414a46; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.school-upload-file-list small { color: #818a86; font-size: 8px; }
+.school-upload-file-list button { width: 28px; height: 28px; border: 0; border-radius: 6px; display: grid; place-items: center; color: #77827d; background: transparent; cursor: pointer; }
+.school-upload-file-list button:hover { color: #774d41; background: #f5e9e4; }
+.school-upload-error { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #e0b8a5; border-radius: 8px; color: #7a4131; background: #fbefea; line-height: 1.4; font-size: 10px; }
+.school-upload-submit { width: 100%; margin-top: 14px; }
+.school-upload-privacy { margin: 11px 0 0; display: flex; align-items: center; justify-content: center; gap: 5px; color: #7c8782; font-size: 8px; }
+.school-upload-success, .school-upload-invalid { min-height: 360px; padding: 52px 34px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.school-upload-success > span { width: 67px; height: 67px; border-radius: 18px; display: grid; place-items: center; color: #3d7155; background: #e2f1e8; }
+.school-upload-success h2, .school-upload-invalid h1 { margin: 18px 0 7px; color: #303835; letter-spacing: -.035em; font-size: 25px; }
+.school-upload-success p, .school-upload-invalid p { max-width: 390px; margin: 0 0 21px; color: #727d78; line-height: 1.55; font-size: 12px; }
+
+@media (max-width: 540px) {
+  .school-upload-page { padding: 0; place-items: stretch; }
+  .school-upload-card { min-height: 100vh; border: 0; border-radius: 0; }
+  .school-upload-brand { padding-inline: 20px; }
+  .school-upload-brand span { display: none; }
+  .school-upload-heading { padding: 28px 22px 0; }
+  .school-upload-form { padding: 22px; }
+}
 
 .settings-modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; }
 .settings-email { margin: 18px 0; padding: 12px 14px; border-radius: 8px; display: grid; gap: 3px; background: #f4f1ef; }

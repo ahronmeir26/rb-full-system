@@ -9,14 +9,19 @@ import {
   ChevronDown,
   ChevronRight,
   Clock3,
+  Copy,
   Download,
+  ExternalLink,
+  FileText,
   Flag,
+  Link2,
   LogOut,
   Mail,
   MessageCircle,
   Pencil,
   Plus,
   RefreshCw,
+  RotateCw,
   Search,
   Send,
   Settings,
@@ -428,6 +433,108 @@ function ShopifyOrdersPanel({ school }: { school: School }) {
   return <section className="panel shopify-orders-panel"><div className="sidebar-panel-heading"><p className="eyebrow">Shopify</p><h2>Orders & shipping</h2></div>{orders === null ? <div className="order-lookup"><p>Load only the orders that used <code>{school.code || "this school's code"}</code>.</p><button className="secondary-button" disabled={!school.code || loading} onClick={loadOrders}><Truck size={15} /> {loading ? "Loading…" : "View matching orders"}</button></div> : <div className="order-summary-list">{orders.length ? orders.map((order) => <div className="order-summary" key={order.id}><div><strong>{order.name}</strong><small>{formatDate(order.createdAt)} · {order.email || "No email"}</small></div><span>{order.displayFulfillmentStatus.replaceAll("_", " ")}</span></div>) : <p className="order-empty">No orders found with this code.</p>}</div>}{error && <p className="contact-error">{error}</p>}</section>;
 }
 
+type SchoolUploadFile = {
+  id: string;
+  title: string;
+  fileName: string;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  status: string;
+  submittedAt: string;
+  downloadUrl: string | null;
+};
+
+function readableFileSize(bytes: number | null) {
+  if (bytes == null) return "Size unavailable";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function SchoolFormsPanel({ school }: { school: School }) {
+  const [uploadLink, setUploadLink] = useState<string | null>(null);
+  const [requiresCouponCode, setRequiresCouponCode] = useState(false);
+  const [files, setFiles] = useState<SchoolUploadFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rotating, setRotating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadUploads = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const response = await fetch(`/api/schools/${school.id}/uploads`);
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) return setError(result?.error || "Unable to load forms.");
+    setUploadLink(result.uploadLink || null);
+    setRequiresCouponCode(result.requiresCouponCode === true);
+    setFiles(result.files || []);
+  }, [school.id]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/schools/${school.id}/uploads`)
+      .then(async (response) => ({ response, result: await response.json().catch(() => null) }))
+      .then(({ response, result }) => {
+        if (!active) return;
+        setLoading(false);
+        if (!response.ok) {
+          setError(result?.error || "Unable to load forms.");
+          return;
+        }
+        setUploadLink(result.uploadLink || null);
+        setRequiresCouponCode(result.requiresCouponCode === true);
+        setFiles(result.files || []);
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false);
+          setError("Unable to load forms.");
+        }
+      });
+    return () => { active = false; };
+  }, [school.id]);
+
+  async function copyUploadLink() {
+    if (!uploadLink) return;
+    try {
+      await navigator.clipboard.writeText(uploadLink);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError("Unable to copy the link. Select it and copy it manually.");
+    }
+  }
+
+  async function rotateUploadLink() {
+    if (!uploadLink || !window.confirm("Create a new link? The school's current upload link will stop working immediately.")) return;
+    setRotating(true);
+    setError("");
+    const response = await fetch(`/api/schools/${school.id}/uploads`, { method: "POST" });
+    const result = await response.json().catch(() => null);
+    setRotating(false);
+    if (!response.ok) return setError(result?.error || "Unable to replace the upload link.");
+    setUploadLink(result.uploadLink);
+    setCopied(false);
+  }
+
+  return <section className="panel school-forms-panel">
+    <div className="school-forms-heading"><div><p className="eyebrow">Documents</p><h2>Forms & upload link</h2></div><button type="button" className="forms-refresh-button" aria-label="Refresh uploaded forms" title="Refresh uploaded forms" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button></div>
+    {loading ? <p className="forms-loading">Loading forms…</p> : <>
+      {requiresCouponCode ? <div className="upload-link-missing"><Link2 size={18} /><p><strong>Coupon code required</strong><span>Assign a coupon code to create this school&apos;s secure link.</span></p></div> : uploadLink && <div className="school-upload-link-box">
+        <label htmlFor={`upload-link-${school.id}`}>School-specific upload link</label>
+        <div><input id={`upload-link-${school.id}`} readOnly value={uploadLink} onFocus={(event) => event.target.select()} /><button type="button" onClick={copyUploadLink}><Copy size={14} /> {copied ? "Copied" : "Copy"}</button></div>
+        <span><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open link</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={12} /> {rotating ? "Replacing…" : "Replace link"}</button></span>
+      </div>}
+      <div className="school-form-list-heading"><strong>Uploaded forms</strong><span>{files.length}</span></div>
+      <div className="school-form-list">{files.length ? files.map((file) => <a key={file.id} href={file.downloadUrl || undefined} target="_blank" rel="noreferrer" aria-disabled={!file.downloadUrl}>
+        <span><FileText size={17} /></span><p><strong>{file.fileName}</strong><small>{formatDate(file.submittedAt, dateTimeFormatter)} · {readableFileSize(file.fileSizeBytes)}</small></p>{file.downloadUrl && <ExternalLink size={13} />}
+      </a>) : <p className="no-school-forms"><FileText size={20} /> No forms uploaded yet</p>}</div>
+    </>}
+    {error && <p className="contact-error">{error}</p>}
+  </section>;
+}
+
 function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack, onEmail, onEdit, onSchoolChanged, onCorrespondenceChanged, onResolveReplies }: { school: School; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEmail: () => void; onEdit: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingStage, setSavingStage] = useState(false);
@@ -481,6 +588,7 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
               <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
             </div>
           </section>
+          <SchoolFormsPanel school={school} />
           <section className="panel school-orders-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">Program activity</p><h2>Order history</h2></div>
             <div className="school-year-list">
