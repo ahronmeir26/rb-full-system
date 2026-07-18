@@ -645,7 +645,6 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
               <div className="school-data-item"><span>Last contacted</span><strong>{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No contact recorded"}</strong></div>
               <div className="school-data-item school-data-wide"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong><small>{school.email || "Email not provided"}</small></div>
               <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
-              <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
             </div>
           </section>
           <ProgramSettingsPanel key={school.id} school={school} statuses={statuses} onSchoolChanged={onSchoolChanged} />
