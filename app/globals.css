@@ -177,8 +177,10 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .detail-fact dt { color: #7a8480; text-transform: uppercase; letter-spacing: .075em; font-size: 10px; font-weight: 780; }
 .detail-fact dd { min-height: 32px; margin: 0; display: flex; align-items: center; }
 .detail-content .title-line .status { padding: 7px 10px; font-size: 11px; }
-.detail-code { min-height: 32px; padding: 4px 9px; border: 1px solid #d4ceca; border-radius: 7px; display: inline-flex; align-items: center; color: #343c39; background: #fff; font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 720; letter-spacing: .01em; }
+.detail-code { min-height: 32px; padding: 4px 9px; border: 1px solid #d4ceca; border-radius: 7px; display: inline-flex; align-items: center; color: #343c39; background: #fff; font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 720; letter-spacing: .01em; cursor: pointer; }
+.detail-code:hover { border-color: #9bb9d7; background: #f7fbff; }
 .detail-code.unassigned { color: #7b5a48; background: #f6e9e2; border-color: #e5cbbd; }
+.coupon-code-modal { width: min(480px, 100%); }
 .status-menu { position: relative; }
 .detail-fact-button { min-height: 32px; padding: 0; border: 0; display: inline-flex; align-items: center; gap: 4px; color: #4f5b56; background: transparent; cursor: pointer; font-size: 14px; font-weight: 750; }
 .detail-fact-button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }

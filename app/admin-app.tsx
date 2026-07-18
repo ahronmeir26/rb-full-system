@@ -17,6 +17,7 @@ import {
   LogOut,
   Mail,
   MessageCircle,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCw,
@@ -32,9 +33,11 @@ import type { DiscountProgram, OutreachStatus, School } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 import { outreachStatusTone } from "@/lib/outreach-status";
 import { currentEmailBody } from "@/lib/email-body";
+import { initial2026SchoolCode } from "@/lib/school-code";
 import { DiscountsSection } from "./discounts-section";
 
 const programTimeZone = "America/New_York";
+const otherStatusValue = "__other__";
 const shortDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "numeric", day: "numeric", year: "numeric" });
 const messageDateFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, month: "short", day: "numeric", year: "numeric" });
 const messageTimeFormatter = new Intl.DateTimeFormat("en-US", { timeZone: programTimeZone, hour: "numeric", minute: "2-digit" });
@@ -148,7 +151,6 @@ type NewSchoolFields = {
   admin: string;
   email: string;
   phone: string;
-  students: string;
 };
 
 function CreateSchoolModal({ statuses, onClose, onCreated }: {
@@ -167,7 +169,6 @@ function CreateSchoolModal({ statuses, onClose, onCreated }: {
     admin: "",
     email: "",
     phone: "",
-    students: "",
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -208,7 +209,6 @@ function CreateSchoolModal({ statuses, onClose, onCreated }: {
           <label><span>Administrator</span><input maxLength={160} value={fields.admin} onChange={(event) => update("admin", event.target.value)} placeholder="Contact name" /></label>
           <label><span>Administrator email</span><input type="email" maxLength={254} value={fields.email} onChange={(event) => update("email", event.target.value)} placeholder="name@school.org" /></label>
           <label><span>Phone</span><input type="tel" maxLength={64} value={fields.phone} onChange={(event) => update("phone", event.target.value)} placeholder="Phone number" /></label>
-          <label><span>Students</span><input type="number" min={0} max={1000000} step={1} value={fields.students} onChange={(event) => update("students", event.target.value)} placeholder="0" /></label>
           <label className="school-create-wide"><span>2026 coupon code</span><input className="code-input" maxLength={64} value={fields.code} onChange={(event) => update("code", event.target.value)} placeholder="Optional" /></label>
         </div>
         <small>You can leave optional details blank and complete them later.</small>
@@ -219,14 +219,14 @@ function CreateSchoolModal({ statuses, onClose, onCreated }: {
   </div>;
 }
 
-function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }: {
+function EditSchoolModal({ school, statuses, onClose, onSaved }: {
   school: School;
   statuses: OutreachStatus[];
   onClose: () => void;
   onSaved: (updates: Partial<School>) => void;
-  onStatusCreated: (status: OutreachStatus) => void;
 }) {
   const [outreachStatus, setOutreachStatus] = useState(school.outreachStatus);
+  const [otherStatus, setOtherStatus] = useState("");
   const [name, setName] = useState(school.name);
   const [schoolType, setSchoolType] = useState(school.schoolType);
   const [district, setDistrict] = useState(school.district);
@@ -235,39 +235,33 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
   const [admin, setAdmin] = useState(school.admin);
   const [email, setEmail] = useState(school.email);
   const [phone, setPhone] = useState(school.phone);
-  const [students, setStudents] = useState(String(school.students));
-  const [newStatus, setNewStatus] = useState("");
+  const [code, setCode] = useState(() => initial2026SchoolCode(school));
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  async function createStatus() {
-    if (!newStatus.trim()) return;
-    setLoading(true);
-    setMessage("");
-    const response = await fetch("/api/outreach-statuses", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: newStatus }),
-    });
-    const result = await response.json().catch(() => null);
-    setLoading(false);
-    if (!response.ok) {
-      setMessage(result?.error || "Unable to create the status.");
-      return;
-    }
-    onStatusCreated(result);
-    setOutreachStatus(result.name);
-    setNewStatus("");
-  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    let statusToSave = outreachStatus;
+    if (outreachStatus === otherStatusValue) {
+      const response = await fetch("/api/outreach-statuses", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: otherStatus }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.name) {
+        setLoading(false);
+        setMessage(result?.error || "Enter a valid status.");
+        return;
+      }
+      statusToSave = result.name;
+    }
     const response = await fetch(`/api/schools/${school.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, schoolType, district, city, state, admin, email, phone, students, outreachStatus }),
+      body: JSON.stringify({ name, schoolType, district, city, state, admin, email, phone, code, outreachStatus: statusToSave }),
     });
     const result = await response.json().catch(() => null);
     setLoading(false);
@@ -285,18 +279,50 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
         <div className="school-create-grid">
           <label className="school-create-wide"><span>School name</span><input autoFocus required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label><span>School type</span><select value={schoolType} onChange={(event) => setSchoolType(event.target.value as School["schoolType"])}><option value="regular">Regular</option><option value="chassidish">Chassidish</option></select></label>
-          <label><span>Status</span><select value={outreachStatus} onChange={(event) => setOutreachStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select></label>
+          <label><span>Status</span><select value={outreachStatus} onChange={(event) => setOutreachStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}<option value={otherStatusValue}>Other</option></select></label>
+          {outreachStatus === otherStatusValue && <label><span>Other status</span><input autoFocus required maxLength={64} value={otherStatus} onChange={(event) => setOtherStatus(event.target.value)} placeholder="Type a status" /></label>}
           <label className="school-create-wide"><span>District</span><input maxLength={120} value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="District or network" /></label>
           <label><span>City</span><input maxLength={120} value={city} onChange={(event) => setCity(event.target.value)} /></label>
           <label><span>State</span><input maxLength={64} value={state} onChange={(event) => setState(event.target.value)} /></label>
           <label><span>Administrator</span><input maxLength={160} value={admin} onChange={(event) => setAdmin(event.target.value)} /></label>
           <label><span>Administrator email</span><input type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           <label><span>Phone</span><input type="tel" maxLength={64} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-          <label><span>Students</span><input type="number" min={0} max={1000000} step={1} value={students} onChange={(event) => setStudents(event.target.value)} /></label>
+          <label className="school-create-wide"><span>2026 coupon code</span><input className="code-input" maxLength={64} value={code} onChange={(event) => setCode(event.target.value)} placeholder="Optional" /></label>
         </div>
-        <div className="new-status-row"><label><span>New status</span><input value={newStatus} onChange={(event) => setNewStatus(event.target.value)} maxLength={64} placeholder="Create a custom status" /></label><button type="button" className="secondary-button" onClick={createStatus} disabled={loading || !newStatus.trim()}>Add status</button></div>
         {message && <div className="login-error" role="alert">{message}</div>}
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading}>{loading ? "Saving…" : "Save school"}</button></div>
+      </form>
+    </div>
+  </div>;
+}
+
+function CouponCodeModal({ school, onClose, onSaved }: { school: School; onClose: () => void; onSaved: (updates: Partial<School>) => void }) {
+  const [code, setCode] = useState(() => initial2026SchoolCode(school));
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    const response = await fetch(`/api/schools/${school.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) return setMessage(result?.error || "Unable to save the coupon code.");
+    onSaved(result);
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="modal coupon-code-modal" role="dialog" aria-modal="true" aria-labelledby="coupon-code-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><p className="eyebrow">2026 school code</p><h2 id="coupon-code-title">Set coupon code</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
+      <form className="school-edit-form" onSubmit={submit}>
+        <label><span>Coupon code</span><input autoFocus className="code-input" maxLength={64} value={code} onChange={(event) => setCode(event.target.value)} placeholder="e.g. SCHOOL26" /></label>
+        {message && <div className="login-error" role="alert">{message}</div>}
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading}>{loading ? "Saving…" : "Save coupon code"}</button></div>
       </form>
     </div>
   </div>;
@@ -521,6 +547,7 @@ function SchoolFormsPanel({ school }: { school: School }) {
 
 function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: School; statuses: OutreachStatus[]; onChanged: (status: string) => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const [open, setOpen] = useState(false);
+  const [otherSelected, setOtherSelected] = useState(false);
   const [customStatus, setCustomStatus] = useState("");
   const [saving, setSaving] = useState(false);
   async function changeStatus(status: string) {
@@ -539,10 +566,10 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
     if (response.ok && status?.name) { onStatusCreated(status); await changeStatus(status.name); setCustomStatus(""); }
     else setSaving(false);
   }
-  return <div className="status-menu"><button type="button" className="detail-fact-button" onClick={() => setOpen((current) => !current)} aria-expanded={open}>{school.outreachStatus}<ChevronDown size={14} /></button>{open && <div className="status-menu-popover"><select aria-label="School status" value={school.outreachStatus} disabled={saving} onChange={(event) => void changeStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><form onSubmit={addStatus}><input value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="Add a custom status" /><button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Add"}</button></form></div>}</div>;
+  return <div className="status-menu"><button type="button" className="detail-fact-button" onClick={() => { setOpen((current) => !current); setOtherSelected(false); }} aria-expanded={open}>{school.outreachStatus}<ChevronDown size={14} /></button>{open && <div className="status-menu-popover"><select aria-label="School status" value={otherSelected ? otherStatusValue : school.outreachStatus} disabled={saving} onChange={(event) => { if (event.target.value === otherStatusValue) setOtherSelected(true); else { setOtherSelected(false); void changeStatus(event.target.value); } }}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}<option value={otherStatusValue}>Other</option></select>{otherSelected && <form onSubmit={addStatus}><input autoFocus value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="Type a status" /><button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Add"}</button></form>}</div>}</div>;
 }
 
-function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
+function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEdit, onEditCode, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEdit: () => void; onEditCode: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingFollowUp, setSavingFollowUp] = useState(false);
 
@@ -560,6 +587,7 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
       <div className="detail-hero">
         <div className="detail-toolbar">
           <button className="back-link" onClick={onBack}><ArrowLeft size={15} /><span>All schools</span></button>
+          <button type="button" className="secondary-button" onClick={onEdit}><Pencil size={15} /> Edit school info</button>
         </div>
         <div className="detail-identity">
           <div className="detail-title-copy">
@@ -575,7 +603,7 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
                 </div>
                 <div className="detail-fact">
                   <dt>2026 school code</dt>
-                  <dd><span className={`detail-code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></dd>
+                  <dd><button type="button" className={`detail-code ${school.code ? "" : "unassigned"}`} onClick={onEditCode} aria-label="Edit 2026 coupon code">{school.code || "Not assigned"}</button></dd>
                 </div>
                 <div className="detail-fact">
                   <dt>Last contacted</dt>
@@ -843,6 +871,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [selected, setSelected] = useState<School | null>(null);
   const [createSchoolOpen, setCreateSchoolOpen] = useState(false);
   const [editSchool, setEditSchool] = useState<School | null>(null);
+  const [couponCodeSchool, setCouponCodeSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<"overview" | "discounts">("overview");
@@ -1066,7 +1095,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEdit={() => setEditSchool(selected)} onEditCode={() => setCouponCodeSchool(selected)} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">
@@ -1090,6 +1119,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
-    {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(updates) => saveSchool(editSchool, updates)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
+    {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(updates) => saveSchool(editSchool, updates)} />}
+    {couponCodeSchool && <CouponCodeModal school={couponCodeSchool} onClose={() => setCouponCodeSchool(null)} onSaved={(updates) => { saveSchool(couponCodeSchool, updates); setCouponCodeSchool(null); }} />}
   </div>;
 }
