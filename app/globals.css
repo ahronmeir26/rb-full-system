@@ -182,12 +182,47 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .detail-code.unassigned { color: #7b5a48; background: #f6e9e2; border-color: #e5cbbd; }
 .coupon-code-modal { width: min(480px, 100%); }
 .status-menu { position: relative; }
-.detail-fact-button { min-height: 32px; padding: 0; border: 0; display: inline-flex; align-items: center; gap: 4px; color: #4f5b56; background: transparent; cursor: pointer; font-size: 14px; font-weight: 750; }
-.detail-fact-button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.status-menu-popover { position: absolute; z-index: 5; top: calc(100% + 7px); right: 0; width: 230px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 10px 24px rgba(45, 50, 48, .16); }
-.status-menu-popover select, .status-menu-popover input { width: 100%; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #46534d; font: inherit; font-size: 11px; }
-.status-menu-popover form { margin-top: 7px; display: flex; gap: 6px; }
-.status-menu-popover form button { padding: 0 9px; border: 0; border-radius: 6px; color: #fff; background: var(--brand); font-size: 10px; font-weight: 700; cursor: pointer; }
+.detail-fact-button { min-height: 36px; padding: 0 10px 0 9px; border: 1px solid rgba(126, 134, 130, .2); border-radius: 10px; display: inline-flex; align-items: center; gap: 7px; color: #3e4844; background: rgba(255, 255, 255, .72); box-shadow: 0 1px 2px rgba(38, 45, 42, .04); cursor: pointer; font-size: 12px; font-weight: 720; transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease; }
+.detail-fact-button:hover, .detail-fact-button[aria-expanded="true"] { border-color: rgba(84, 111, 99, .34); color: var(--ink); background: #fff; box-shadow: 0 3px 10px rgba(38, 45, 42, .08); }
+.detail-fact-button:focus-visible { outline: 3px solid rgba(72, 118, 98, .16); outline-offset: 2px; }
+.status-trigger-dot, .status-option-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #909995; box-shadow: 0 0 0 3px rgba(144, 153, 149, .12); }
+.detail-fact-button[data-tone="info"] .status-trigger-dot, .status-menu-options [data-tone="info"] .status-option-dot { background: #5f8bb4; box-shadow: 0 0 0 3px rgba(95, 139, 180, .12); }
+.detail-fact-button[data-tone="negative"] .status-trigger-dot, .status-menu-options [data-tone="negative"] .status-option-dot { background: #b66e61; box-shadow: 0 0 0 3px rgba(182, 110, 97, .12); }
+.detail-fact-button[data-tone="positive"] .status-trigger-dot, .status-menu-options [data-tone="positive"] .status-option-dot { background: #4b9874; box-shadow: 0 0 0 3px rgba(75, 152, 116, .12); }
+.detail-fact-button[data-tone="complete"] .status-trigger-dot, .status-menu-options [data-tone="complete"] .status-option-dot { background: #6a7cae; box-shadow: 0 0 0 3px rgba(106, 124, 174, .12); }
+.detail-fact-button[data-tone="attention"] .status-trigger-dot, .status-menu-options [data-tone="attention"] .status-option-dot { background: #bd8a3a; box-shadow: 0 0 0 3px rgba(189, 138, 58, .12); }
+.detail-fact-button[data-tone="custom"] .status-trigger-dot, .status-menu-options [data-tone="custom"] .status-option-dot { background: #8b71ae; box-shadow: 0 0 0 3px rgba(139, 113, 174, .12); }
+.status-trigger-chevron { margin-left: 1px; color: #7b8581; transition: transform 160ms ease; }
+.detail-fact-button[aria-expanded="true"] .status-trigger-chevron { transform: rotate(180deg); }
+.status-menu-popover { position: absolute; z-index: 5; top: calc(100% + 9px); right: 0; width: 264px; padding: 8px; border: 1px solid rgba(110, 119, 115, .18); border-radius: 14px; background: rgba(255, 255, 255, .98); box-shadow: 0 18px 45px rgba(37, 44, 41, .16), 0 3px 10px rgba(37, 44, 41, .06); backdrop-filter: blur(16px); transform-origin: top right; animation: status-menu-in 140ms ease-out; }
+@keyframes status-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.status-menu-heading { padding: 7px 9px 9px; display: grid; gap: 2px; border-bottom: 1px solid #efedeb; }
+.status-menu-heading > span { color: #303936; font-size: 11px; font-weight: 760; }
+.status-menu-heading small { color: #89918e; font-size: 9px; }
+.status-custom-heading { grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 7px; }
+.status-custom-heading > button { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; display: grid; place-items: center; color: #68736e; background: #f3f1ef; cursor: pointer; }
+.status-custom-heading > button:hover { color: var(--ink); background: #eae7e4; }
+.status-custom-heading > div { display: grid; gap: 2px; }
+.status-custom-heading > div > span { color: #303936; font-size: 11px; font-weight: 760; }
+.status-menu-options { padding-top: 5px; display: grid; gap: 2px; }
+.status-menu-options > button { width: 100%; min-height: 38px; padding: 0 10px; border: 0; border-radius: 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #46504c; background: transparent; text-align: left; font: inherit; font-size: 11px; cursor: pointer; transition: color 120ms ease, background 120ms ease, transform 120ms ease; }
+.status-menu-options > button:hover, .status-menu-options > button:focus-visible { color: var(--ink); background: #f5f3f1; outline: none; }
+.status-menu-options > button:active { transform: scale(.985); }
+.status-menu-options > button[data-selected="true"] { color: #28332f; background: #edf4f0; font-weight: 720; }
+.status-option-label { display: flex; align-items: center; gap: 10px; }
+.status-menu-check { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--brand); font-size: 11px; opacity: 0; transform: scale(.8); }
+.status-menu-options > button[data-selected="true"] .status-menu-check { opacity: 1; transform: scale(1); }
+.status-menu-options > .status-other-option { min-height: 40px; margin-top: 4px; border-top: 1px solid #efedeb; border-radius: 0 0 9px 9px; color: #68736e; }
+.status-other-icon { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; color: var(--brand); background: #eaf2ee; }
+.status-menu-popover input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #d9ddda; border-radius: 9px; background: #fff; color: #38423e; font: inherit; font-size: 11px; outline: none; }
+.status-menu-popover input:focus { border-color: #8aa99a; box-shadow: 0 0 0 3px rgba(72, 118, 98, .12); }
+.status-custom-form { padding: 12px 4px 4px; display: grid; gap: 7px; }
+.status-custom-form > label { color: #65706b; font-size: 9px; font-weight: 700; letter-spacing: .02em; }
+.status-custom-actions { margin-top: 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; }
+.status-custom-actions > button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; color: #fff; background: var(--brand); font-size: 10px; font-weight: 700; cursor: pointer; }
+.status-custom-actions > .status-custom-cancel { color: #66716c; background: #f2f0ee; }
+.status-custom-actions > .status-custom-cancel:hover { color: var(--ink); background: #e9e6e3; }
+.status-custom-actions > button[type="submit"]:hover { background: var(--brand-dark); }
 .status-menu-popover form button:disabled { opacity: .55; cursor: not-allowed; }
 .detail-metric { color: #303936; font-size: 25px; line-height: 1; letter-spacing: -.03em; }
 .detail-fact-value { color: #4f5b56; font-size: 13px; font-weight: 680; white-space: nowrap; }

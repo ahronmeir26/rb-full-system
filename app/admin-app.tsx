@@ -550,6 +550,28 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
   const [otherSelected, setOtherSelected] = useState(false);
   const [customStatus, setCustomStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setOtherSelected(false);
+      }
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setOtherSelected(false);
+      }
+    }
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
   async function changeStatus(status: string) {
     if (!status || status === school.outreachStatus) return setOpen(false);
     setSaving(true);
@@ -566,7 +588,57 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
     if (response.ok && status?.name) { onStatusCreated(status); await changeStatus(status.name); setCustomStatus(""); }
     else setSaving(false);
   }
-  return <div className="status-menu"><button type="button" className="detail-fact-button" onClick={() => { setOpen((current) => !current); setOtherSelected(false); }} aria-expanded={open}>{school.outreachStatus}<ChevronDown size={14} /></button>{open && <div className="status-menu-popover"><select aria-label="School status" value={otherSelected ? otherStatusValue : school.outreachStatus} disabled={saving} onChange={(event) => { if (event.target.value === otherStatusValue) setOtherSelected(true); else { setOtherSelected(false); void changeStatus(event.target.value); } }}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}<option value={otherStatusValue}>Other</option></select>{otherSelected && <form onSubmit={addStatus}><input autoFocus value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="Type a status" /><button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Add"}</button></form>}</div>}</div>;
+  return (
+    <div className="status-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="detail-fact-button"
+        data-tone={outreachStatusTone(school.outreachStatus)}
+        onClick={() => { setOpen((current) => !current); setOtherSelected(false); }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <span className="status-trigger-dot" aria-hidden="true" />
+        {school.outreachStatus}
+        <ChevronDown className="status-trigger-chevron" size={14} />
+      </button>
+      {open && (
+        <div className="status-menu-popover">
+          {otherSelected ? (
+            <>
+              <div className="status-menu-heading status-custom-heading">
+                <button type="button" aria-label="Back to statuses" onClick={() => setOtherSelected(false)}><ArrowLeft size={14} /></button>
+                <div><span>Create a status</span><small>Add it and apply it to this school</small></div>
+              </div>
+              <form className="status-custom-form" onSubmit={addStatus}>
+                <label htmlFor="custom-school-status">Status name</label>
+                <input id="custom-school-status" autoFocus value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="e.g. Follow up next week" />
+                <div className="status-custom-actions">
+                  <button type="button" className="status-custom-cancel" disabled={saving} onClick={() => setOtherSelected(false)}>Cancel</button>
+                  <button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Create & select"}</button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <div className="status-menu-heading"><span>Change status</span><small>Select a new status for this school</small></div>
+              <div className="status-menu-options" role="menu" aria-label="School status">
+                {statuses.map((status) => (
+                  <button type="button" role="menuitemradio" aria-checked={status.name === school.outreachStatus} data-selected={status.name === school.outreachStatus} data-tone={outreachStatusTone(status.name)} disabled={saving} key={status.name} onClick={() => void changeStatus(status.name)}>
+                    <span className="status-option-label"><span className="status-option-dot" aria-hidden="true" />{status.name}</span>
+                    <span className="status-menu-check" aria-hidden="true">✓</span>
+                  </button>
+                ))}
+                <button type="button" className="status-other-option" role="menuitemradio" aria-checked={false} disabled={saving} onClick={() => setOtherSelected(true)}>
+                  <span className="status-option-label"><span className="status-other-icon" aria-hidden="true"><Plus size={12} /></span>Create custom status</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEdit, onEditCode, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEdit: () => void; onEditCode: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
