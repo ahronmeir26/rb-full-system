@@ -161,7 +161,7 @@ test("Shopify function applies independent men's and boys' discounts", () => {
   assert.deepEqual(operation.candidates[1].targets, [{ cartLine: { id: "boys-line" } }]);
 });
 
-test("2026 coupon codes start blank and remain admin-editable", async () => {
+test("2026 coupon codes start blank and can be assigned from school settings", async () => {
   const [seed, workbookImporter, supabaseSync, editor, updateRoute] = await Promise.all([
     readFile(new URL("../app/school-data.generated.json", import.meta.url), "utf8"),
     readFile(new URL("../scripts/import_school_workbook.py", import.meta.url), "utf8"),
@@ -175,10 +175,10 @@ test("2026 coupon codes start blank and remain admin-editable", async () => {
   assert.ok(schools.every((school) => school.code === ""));
   assert.match(workbookImporter, /"code": ""/);
   assert.doesNotMatch(supabaseSync, /^\s+code: school\.code/m);
-  assert.match(editor, /2026 coupon code/);
-  assert.match(editor, /School settings/);
   assert.match(editor, /aria-label="Edit 2026 coupon code"/);
-  assert.match(editor, /body: JSON\.stringify\(\{ code, outreachStatus \}\)/);
+  assert.match(editor, /Set coupon code/);
+  assert.match(editor, /initial2026SchoolCode\(school\)/);
+  assert.match(editor, /code, outreachStatus/);
   assert.match(updateRoute, /\.update\(updates\)/);
 });
 
@@ -236,7 +236,8 @@ test("supports custom outreach statuses and complete contact history", async () 
   assert.match(schema, /record_school_outreach_status/);
   assert.match(schema, /contacted_at timestamptz not null default now\(\)/);
   assert.match(schema, /update_school_last_contacted_at/);
-  assert.match(editor, /Create a custom status/);
+  assert.match(editor, /<option value=\{otherStatusValue\}>Other<\/option>/);
+  assert.match(editor, /placeholder="Type a status"/);
   assert.match(editor, /Correspondence with/);
   assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\.map\(\(row\) => row\.correspondence\)\)/);
   assert.match(correspondenceRoute, /queueKlaviyoOutgoingEmail/);

@@ -534,8 +534,8 @@ function SchoolFormsPanel({ school }: { school: School }) {
 
   const latestFile = files[0];
   return <section className="sidebar-compact-section compact-documents">
-    <div className="compact-section-heading"><div><FileText size={14} /><strong>Documents</strong>{!loading && <span>{files.length}</span>}</div><button type="button" className="compact-icon-button" aria-label="Refresh uploaded forms" title="Refresh" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={13} /></button></div>
-    {loading ? <p className="compact-empty">Loading documents…</p> : requiresCouponCode ? <div className="compact-required-row"><span>Coupon code required for the upload link</span></div> : <>
+    <div className="compact-section-heading"><div><FileText size={14} /><strong>Forms</strong>{!loading && <span>{files.length}</span>}</div><button type="button" className="compact-icon-button" aria-label="Refresh uploaded forms" title="Refresh" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={13} /></button></div>
+    {loading ? <p className="compact-empty">Loading forms…</p> : requiresCouponCode ? <div className="compact-required-row"><span>Coupon code required for the upload link</span></div> : <>
       <div className="compact-upload-actions">
         {uploadLink ? <><button type="button" onClick={copyUploadLink}><Copy size={12} /> {copied ? "Copied" : "Copy upload link"}</button><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={12} /> {rotating ? "Replacing…" : "Replace"}</button></> : <span>Upload link unavailable</span>}
       </div>
@@ -644,6 +644,16 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
 function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEdit, onEditCode, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEdit: () => void; onEditCode: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [sidebarModal, setSidebarModal] = useState<"forms" | "orders" | null>(null);
+
+  useEffect(() => {
+    if (!sidebarModal) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSidebarModal(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [sidebarModal]);
 
   async function toggleFollowUp() {
     setSavingFollowUp(true);
@@ -713,11 +723,33 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
                 <div><span>2024</span><strong>{school.orders2024.toLocaleString()}</strong></div>
               </div>
             </section>
-            <SchoolFormsPanel school={school} />
-            <ShopifyOrdersPanel school={school} />
+            <section className="sidebar-resource-actions" aria-label="School forms and orders">
+              <button type="button" className="sidebar-resource-button" aria-haspopup="dialog" aria-controls="school-forms-modal" onClick={() => setSidebarModal("forms")}>
+                <FileText size={28} aria-hidden="true" />
+                <span>Forms</span>
+              </button>
+              <button type="button" className="sidebar-resource-button" aria-haspopup="dialog" aria-controls="school-orders-modal" onClick={() => setSidebarModal("orders")}>
+                <ShoppingBag size={28} aria-hidden="true" />
+                <span>Orders</span>
+              </button>
+            </section>
           </section>
         </aside>
       </div>
+      {sidebarModal === "forms" && <div className="modal-backdrop" role="presentation" onMouseDown={() => setSidebarModal(null)}>
+        <div id="school-forms-modal" className="modal resource-modal" role="dialog" aria-modal="true" aria-labelledby="school-forms-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-head"><div><p className="eyebrow">School resources</p><h2 id="school-forms-title">Forms for {school.name}</h2></div><button type="button" className="icon-button" onClick={() => setSidebarModal(null)} aria-label="Close forms"><X size={20} /></button></div>
+          <div className="resource-modal-body"><SchoolFormsPanel school={school} /></div>
+        </div>
+      </div>}
+      {sidebarModal === "orders" && <div className="modal-backdrop" role="presentation" onMouseDown={() => setSidebarModal(null)}>
+        <div id="school-orders-modal" className="modal resource-modal" role="dialog" aria-modal="true" aria-labelledby="school-orders-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-head"><div><p className="eyebrow">School activity</p><h2 id="school-orders-title">Orders for {school.name}</h2></div><button type="button" className="icon-button" onClick={() => setSidebarModal(null)} aria-label="Close orders"><X size={20} /></button></div>
+          <div className="resource-modal-body">
+            <ShopifyOrdersPanel school={school} />
+          </div>
+        </div>
+      </div>}
     </main>
   );
 }
