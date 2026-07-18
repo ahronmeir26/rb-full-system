@@ -450,14 +450,20 @@ function readableFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SchoolFormsPanel({ school }: { school: School }) {
+function SchoolFormsPanel({ school, onEdit, onSchoolChanged }: {
+  school: School;
+  onEdit: () => void;
+  onSchoolChanged: (updates: Partial<School>) => void;
+}) {
   const [uploadLink, setUploadLink] = useState<string | null>(null);
   const [requiresCouponCode, setRequiresCouponCode] = useState(false);
   const [files, setFiles] = useState<SchoolUploadFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addingCouponCode, setAddingCouponCode] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const suggestedCode = initial2026SchoolCode(school);
 
   const loadUploads = useCallback(async () => {
     setLoading(true);
@@ -518,10 +524,29 @@ function SchoolFormsPanel({ school }: { school: School }) {
     setCopied(false);
   }
 
+  async function addCouponCode() {
+    if (!suggestedCode) {
+      onEdit();
+      return;
+    }
+    setAddingCouponCode(true);
+    setError("");
+    const response = await fetch(`/api/schools/${school.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: suggestedCode }),
+    });
+    const result = await response.json().catch(() => null);
+    setAddingCouponCode(false);
+    if (!response.ok) return setError(result?.error || "Unable to add the coupon code.");
+    onSchoolChanged({ code: result.code });
+    await loadUploads();
+  }
+
   return <section className="panel school-forms-panel">
     <div className="school-forms-heading"><div><p className="eyebrow">Documents</p><h2>Forms & upload link</h2></div><button type="button" className="forms-refresh-button" aria-label="Refresh uploaded forms" title="Refresh uploaded forms" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={15} /></button></div>
     {loading ? <p className="forms-loading">Loading forms…</p> : <>
-      {requiresCouponCode ? <div className="upload-link-missing"><Link2 size={18} /><p><strong>Coupon code required</strong><span>Assign a coupon code to create this school&apos;s secure link.</span></p></div> : uploadLink && <div className="school-upload-link-box">
+      {requiresCouponCode ? <div className="upload-link-missing"><Link2 size={18} /><div className="upload-link-missing-copy"><strong>Coupon code required</strong><span>{suggestedCode ? <>Use the suggested 2026 code <code>{suggestedCode}</code> to create the secure link.</> : <>Enter a coupon code to create this school&apos;s secure link.</>}</span><button type="button" disabled={addingCouponCode} onClick={addCouponCode}><BadgePercent size={14} /> {addingCouponCode ? "Adding…" : suggestedCode ? `Add ${suggestedCode}` : "Enter coupon code"}</button></div></div> : uploadLink && <div className="school-upload-link-box">
         <label htmlFor={`upload-link-${school.id}`}>School-specific upload link</label>
         <div><input id={`upload-link-${school.id}`} readOnly value={uploadLink} onFocus={(event) => event.target.select()} /><button type="button" onClick={copyUploadLink}><Copy size={14} /> {copied ? "Copied" : "Copy"}</button></div>
         <span><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open link</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={12} /> {rotating ? "Replacing…" : "Replace link"}</button></span>
@@ -588,7 +613,7 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
               <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
             </div>
           </section>
-          <SchoolFormsPanel school={school} />
+          <SchoolFormsPanel school={school} onEdit={onEdit} onSchoolChanged={onSchoolChanged} />
           <section className="panel school-orders-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">Program activity</p><h2>Order history</h2></div>
             <div className="school-year-list">

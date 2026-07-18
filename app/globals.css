@@ -506,9 +506,12 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .forms-refresh-button:hover { background: #f8f5f3; }
 .forms-loading { margin: 0; padding: 18px 0; border-top: 1px solid var(--line-soft); color: #75807b; font-size: 10px; }
 .upload-link-missing { padding: 13px; border: 1px solid #e5d2b1; border-radius: 8px; display: flex; align-items: flex-start; gap: 10px; color: #785b26; background: #fbf5e8; }
-.upload-link-missing p { margin: 0; display: grid; gap: 4px; }
+.upload-link-missing-copy { min-width: 0; flex: 1; display: grid; gap: 4px; }
 .upload-link-missing strong { font-size: 11px; }
 .upload-link-missing span { line-height: 1.4; font-size: 9px; }
+.upload-link-missing code { color: #684818; font-family: var(--font-geist-mono), monospace; font-size: 9px; font-weight: 760; }
+.upload-link-missing button { min-height: 34px; margin-top: 7px; padding: 0 10px; border: 1px solid #d5bb87; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: #684818; background: #fffaf0; cursor: pointer; font-size: 9px; font-weight: 760; }
+.upload-link-missing button:hover { border-color: #bd9650; background: #fff; }
 .school-upload-link-box { padding: 13px; border: 1px solid #ccdceb; border-radius: 9px; background: #f2f7fb; }
 .school-upload-link-box > label { display: block; margin-bottom: 7px; color: #526272; text-transform: uppercase; letter-spacing: .06em; font-size: 8px; font-weight: 760; }
 .school-upload-link-box > div { display: flex; }

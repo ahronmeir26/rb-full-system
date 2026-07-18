@@ -177,6 +177,8 @@ test("2026 coupon codes start blank and remain admin-editable", async () => {
   assert.doesNotMatch(supabaseSync, /^\s+code: school\.code/m);
   assert.match(editor, /2026 coupon code/);
   assert.match(editor, /Edit school/);
+  assert.match(editor, /suggestedCode \? `Add \$\{suggestedCode\}` : "Enter coupon code"/);
+  assert.match(editor, /body: JSON\.stringify\(\{ code: suggestedCode \}\)/);
   assert.match(updateRoute, /\.update\(updates\)/);
 });
 
