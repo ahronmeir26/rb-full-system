@@ -17,7 +17,6 @@ import {
   LogOut,
   Mail,
   MessageCircle,
-  Pencil,
   Plus,
   RefreshCw,
   RotateCw,
@@ -26,13 +25,11 @@ import {
   Settings,
   ShoppingBag,
   Truck,
-  Users,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DiscountProgram, OutreachStatus, School } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
-import { initial2026SchoolCode } from "@/lib/school-code";
 import { outreachStatusTone } from "@/lib/outreach-status";
 import { currentEmailBody } from "@/lib/email-body";
 import { DiscountsSection } from "./discounts-section";
@@ -226,11 +223,19 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
   school: School;
   statuses: OutreachStatus[];
   onClose: () => void;
-  onSaved: (code: string, outreachStatus: string) => void;
+  onSaved: (updates: Partial<School>) => void;
   onStatusCreated: (status: OutreachStatus) => void;
 }) {
-  const [code, setCode] = useState(() => initial2026SchoolCode(school));
   const [outreachStatus, setOutreachStatus] = useState(school.outreachStatus);
+  const [name, setName] = useState(school.name);
+  const [schoolType, setSchoolType] = useState(school.schoolType);
+  const [district, setDistrict] = useState(school.district);
+  const [city, setCity] = useState(school.city);
+  const [state, setState] = useState(school.state);
+  const [admin, setAdmin] = useState(school.admin);
+  const [email, setEmail] = useState(school.email);
+  const [phone, setPhone] = useState(school.phone);
+  const [students, setStudents] = useState(String(school.students));
   const [newStatus, setNewStatus] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -262,7 +267,7 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
     const response = await fetch(`/api/schools/${school.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code, outreachStatus }),
+      body: JSON.stringify({ name, schoolType, district, city, state, admin, email, phone, students, outreachStatus }),
     });
     const result = await response.json().catch(() => null);
     setLoading(false);
@@ -270,38 +275,31 @@ function EditSchoolModal({ school, statuses, onClose, onSaved, onStatusCreated }
       setMessage(result?.error || "Unable to save the school.");
       return;
     }
-    onSaved(result.code, result.outreachStatus);
+    onSaved(result);
   }
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
     <div className="modal edit-school-modal" role="dialog" aria-modal="true" aria-label={`Edit ${school.name}`} onMouseDown={(event) => event.stopPropagation()}>
       <div className="modal-head"><div><p className="eyebrow">School settings</p><h2>Edit {school.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
       <form className="school-edit-form" onSubmit={submit}>
-        <label><span>Status</span><select value={outreachStatus} onChange={(event) => setOutreachStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select></label>
+        <div className="school-create-grid">
+          <label className="school-create-wide"><span>School name</span><input autoFocus required maxLength={160} value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label><span>School type</span><select value={schoolType} onChange={(event) => setSchoolType(event.target.value as School["schoolType"])}><option value="regular">Regular</option><option value="chassidish">Chassidish</option></select></label>
+          <label><span>Status</span><select value={outreachStatus} onChange={(event) => setOutreachStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select></label>
+          <label className="school-create-wide"><span>District</span><input maxLength={120} value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="District or network" /></label>
+          <label><span>City</span><input maxLength={120} value={city} onChange={(event) => setCity(event.target.value)} /></label>
+          <label><span>State</span><input maxLength={64} value={state} onChange={(event) => setState(event.target.value)} /></label>
+          <label><span>Administrator</span><input maxLength={160} value={admin} onChange={(event) => setAdmin(event.target.value)} /></label>
+          <label><span>Administrator email</span><input type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+          <label><span>Phone</span><input type="tel" maxLength={64} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+          <label><span>Students</span><input type="number" min={0} max={1000000} step={1} value={students} onChange={(event) => setStudents(event.target.value)} /></label>
+        </div>
         <div className="new-status-row"><label><span>New status</span><input value={newStatus} onChange={(event) => setNewStatus(event.target.value)} maxLength={64} placeholder="Create a custom status" /></label><button type="button" className="secondary-button" onClick={createStatus} disabled={loading || !newStatus.trim()}>Add status</button></div>
-        <label><span>2026 coupon code</span><input value={code} onChange={(event) => setCode(event.target.value)} maxLength={64} autoFocus placeholder="Enter a coupon code" /></label>
-        <small>This code is printed on the school&apos;s downloadable order form. Leave it blank to remove the code.</small>
         {message && <div className="login-error" role="alert">{message}</div>}
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading}>{loading ? "Saving…" : "Save school"}</button></div>
       </form>
     </div>
   </div>;
-}
-
-function RenameSchoolModal({ school, onClose, onSaved }: { school: School; onClose: () => void; onSaved: (name: string) => void }) {
-  const [name, setName] = useState(school.name);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setLoading(true); setError("");
-    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
-    const result = await response.json().catch(() => null);
-    setLoading(false);
-    if (!response.ok) return setError(result?.error || "Unable to rename the school.");
-    onSaved(result.name);
-  }
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><form className="modal rename-school-modal" role="dialog" aria-modal="true" aria-labelledby="rename-school-title" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">School name</p><h2 id="rename-school-title">Rename school</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div><label className="rename-school-field"><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={160} required /></label>{error && <div className="login-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading || !name.trim()}>{loading ? "Saving…" : "Save name"}</button></div></form></div>;
 }
 
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
@@ -401,37 +399,7 @@ function NoteModal({ school, onClose, onSaved }: { school: School; onClose: () =
   </div>;
 }
 
-type SchoolContact = { id: string; name: string | null; email: string; phone: string | null; title: string; is_primary: boolean };
 type ShopifyOrder = { id: string; name: string; email: string | null; createdAt: string; displayFinancialStatus: string; displayFulfillmentStatus: string; total: string; currency: string };
-
-function ContactsPanel({ school }: { school: School }) {
-  const [contacts, setContacts] = useState<SchoolContact[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [title, setTitle] = useState("Program contact");
-  const [error, setError] = useState("");
-
-  const load = useCallback(() => fetch(`/api/schools/${school.id}/contacts`).then((response) => response.json()).then((result) => setContacts(Array.isArray(result?.contacts) ? result.contacts : [])).catch(() => undefined), [school.id]);
-  useEffect(() => { void load(); }, [load]);
-  async function addContact(event: React.FormEvent) {
-    event.preventDefault();
-    setError("");
-    const response = await fetch(`/api/schools/${school.id}/contacts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, email, title }) });
-    const result = await response.json().catch(() => null);
-    if (!response.ok) return setError(result?.error || "Unable to save contact.");
-    setContacts((current) => [...current.filter((contact) => contact.id !== result.contact.id), result.contact]);
-    setName(""); setEmail(""); setTitle("Program contact"); setAdding(false);
-  }
-  const visibleContacts = contacts.length ? contacts : school.email ? [{ id: "primary", name: school.admin || null, email: school.email, phone: school.phone || null, title: "Program administrator", is_primary: true }] : [];
-  const primaryContact = visibleContacts.find((contact) => contact.is_primary) || visibleContacts[0];
-  return <section className="sidebar-compact-section compact-contacts">
-    <div className="compact-section-heading"><div><Users size={14} /><strong>Contacts</strong>{visibleContacts.length > 0 && <span>{visibleContacts.length}</span>}</div><button type="button" className="compact-text-button" onClick={() => setAdding((current) => !current)}>{adding ? "Cancel" : "Add"}</button></div>
-    {primaryContact ? <div className="compact-contact-row"><div><strong>{primaryContact.name || primaryContact.email}</strong><a href={`mailto:${primaryContact.email}`}>{primaryContact.email}</a></div>{visibleContacts.length > 1 && <small>+{visibleContacts.length - 1} more</small>}</div> : <p className="compact-empty">No contacts yet</p>}
-    {adding && <form className="contact-add-form compact-contact-form" onSubmit={addContact}><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" /><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" /><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Role" />{error && <small className="contact-error">{error}</small>}<div><button type="button" className="secondary-button" onClick={() => setAdding(false)}>Cancel</button><button className="primary-button">Add contact</button></div></form>}
-  </section>;
-}
-
 function ShopifyOrdersPanel({ school }: { school: School }) {
   const [orders, setOrders] = useState<ShopifyOrder[] | null>(null);
   const [error, setError] = useState("");
@@ -470,10 +438,7 @@ function readableFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SchoolFormsPanel({ school, onEditSchool }: {
-  school: School;
-  onEditSchool: () => void;
-}) {
+function SchoolFormsPanel({ school }: { school: School }) {
   const [uploadLink, setUploadLink] = useState<string | null>(null);
   const [requiresCouponCode, setRequiresCouponCode] = useState(false);
   const [files, setFiles] = useState<SchoolUploadFile[]>([]);
@@ -544,7 +509,7 @@ function SchoolFormsPanel({ school, onEditSchool }: {
   const latestFile = files[0];
   return <section className="sidebar-compact-section compact-documents">
     <div className="compact-section-heading"><div><FileText size={14} /><strong>Documents</strong>{!loading && <span>{files.length}</span>}</div><button type="button" className="compact-icon-button" aria-label="Refresh uploaded forms" title="Refresh" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={13} /></button></div>
-    {loading ? <p className="compact-empty">Loading documents…</p> : requiresCouponCode ? <div className="compact-required-row"><span>Coupon code required for the upload link</span><button type="button" onClick={onEditSchool}>Set code</button></div> : <>
+    {loading ? <p className="compact-empty">Loading documents…</p> : requiresCouponCode ? <div className="compact-required-row"><span>Coupon code required for the upload link</span></div> : <>
       <div className="compact-upload-actions">
         {uploadLink ? <><button type="button" onClick={copyUploadLink}><Copy size={12} /> {copied ? "Copied" : "Copy upload link"}</button><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={12} /> {rotating ? "Replacing…" : "Replace"}</button></> : <span>Upload link unavailable</span>}
       </div>
@@ -554,7 +519,30 @@ function SchoolFormsPanel({ school, onEditSchool }: {
   </section>;
 }
 
-function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack, onRename, onEditSchool, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies }: { school: School; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onRename: () => void; onEditSchool: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void }) {
+function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: School; statuses: OutreachStatus[]; onChanged: (status: string) => void; onStatusCreated: (status: OutreachStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const [customStatus, setCustomStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  async function changeStatus(status: string) {
+    if (!status || status === school.outreachStatus) return setOpen(false);
+    setSaving(true);
+    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ outreachStatus: status }) });
+    setSaving(false);
+    if (response.ok) { onChanged(status); setOpen(false); }
+  }
+  async function addStatus(event: React.FormEvent) {
+    event.preventDefault();
+    if (!customStatus.trim()) return;
+    setSaving(true);
+    const response = await fetch("/api/outreach-statuses", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: customStatus }) });
+    const status = await response.json().catch(() => null);
+    if (response.ok && status?.name) { onStatusCreated(status); await changeStatus(status.name); setCustomStatus(""); }
+    else setSaving(false);
+  }
+  return <div className="status-menu"><button type="button" className="detail-fact-button" onClick={() => setOpen((current) => !current)} aria-expanded={open}>{school.outreachStatus}<ChevronDown size={14} /></button>{open && <div className="status-menu-popover"><select aria-label="School status" value={school.outreachStatus} disabled={saving} onChange={(event) => void changeStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><form onSubmit={addStatus}><input value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="Add a custom status" /><button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Add"}</button></form></div>}</div>;
+}
+
+function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingFollowUp, setSavingFollowUp] = useState(false);
 
@@ -577,27 +565,23 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
           <div className="detail-title-copy">
             <div className="detail-primary-row">
               <div className="detail-name-block">
-                <div className="title-line"><h1>{school.name}</h1><button type="button" className="rename-school-button" onClick={onRename} aria-label={`Rename ${school.name}`} title="Rename school"><Pencil size={16} /></button></div>
+                <div className="title-line"><h1>{school.name}</h1></div>
                 <p className="detail-location"><Building2 size={14} aria-hidden="true" /><span>{[school.district, location].filter(Boolean).join(" · ")}</span></p>
               </div>
-              <dl className="detail-facts">
+              <div className="detail-header-actions"><dl className="detail-facts">
                 <div className="detail-fact">
                   <dt>Status</dt>
-                  <dd><button type="button" className="detail-fact-button" onClick={onEditSchool} aria-label="Edit school status"><OutreachPill status={school.outreachStatus} /><Pencil size={12} /></button></dd>
+                  <dd><StatusMenu school={school} statuses={statuses} onChanged={(outreachStatus) => onSchoolChanged({ outreachStatus })} onStatusCreated={onStatusCreated} /></dd>
                 </div>
                 <div className="detail-fact">
                   <dt>2026 school code</dt>
-                  <dd><button type="button" className={`detail-code detail-code-button ${school.code ? "" : "unassigned"}`} onClick={onEditSchool} aria-label="Edit 2026 coupon code"><span>{school.code || "Not assigned"}</span><Pencil size={12} /></button></dd>
-                </div>
-                <div className="detail-fact">
-                  <dt>2026 orders</dt>
-                  <dd><strong className="detail-metric">{school.orders2026.toLocaleString()}</strong></dd>
+                  <dd><span className={`detail-code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></dd>
                 </div>
                 <div className="detail-fact">
                   <dt>Last contacted</dt>
                   <dd><span className="detail-fact-value">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></dd>
                 </div>
-              </dl>
+              </dl></div>
             </div>
             {(school.replyPending || school.needsFollowUp) && <div className="detail-attention" aria-label="Items needing attention">
               {school.replyPending && <><span className="status reply-needed"><Mail size={13} /> Reply needed</span><button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button></>}
@@ -611,13 +595,10 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
         <aside className="detail-sidebar" aria-label="School details">
           <section className="panel compact-sidebar-card">
             <section className="sidebar-compact-section compact-school-summary">
-              <div className="compact-sidebar-title"><div><p className="eyebrow">School details</p><h2>At a glance</h2></div><button type="button" className="compact-text-button" onClick={onEditSchool}>Edit</button></div>
-            <div className="school-data-grid">
-              <div className="school-data-item"><span>Follow-up</span><button type="button" className={`follow-up-toggle ${school.needsFollowUp ? "active" : ""}`} disabled={savingFollowUp} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}><Flag size={13} /> {school.needsFollowUp ? "Flagged — click to clear" : "Flag for follow-up"}</button></div>
-              <div className="school-data-item"><span>Administrator</span><strong>{school.admin || "Not provided"}</strong></div>
-              <div className="school-data-item"><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div>
-              <div className="school-data-item school-data-wide"><span>Email</span><small>{school.email || "Email not provided"}</small></div>
-            </div>
+              <div className="school-data-grid">
+                <div className="school-data-item"><button type="button" className={`follow-up-toggle ${school.needsFollowUp ? "active" : ""}`} disabled={savingFollowUp} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}><Flag size={23} /><span>Follow up</span></button></div>
+                <div className="school-data-item compact-contact-summary"><div><span>Administrator</span><strong>{school.admin || "Not provided"}</strong></div><div><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div><div><span>Email</span><small>{school.email || "Email not provided"}</small></div></div>
+              </div>
             </section>
             <section className="sidebar-compact-section compact-order-history">
               <div className="compact-section-heading"><div><ShoppingBag size={14} /><strong>Order history</strong></div><OrderFormDownload school={school} className="compact-text-button" compact /></div>
@@ -627,9 +608,8 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
                 <div><span>2024</span><strong>{school.orders2024.toLocaleString()}</strong></div>
               </div>
             </section>
-            <SchoolFormsPanel school={school} onEditSchool={onEditSchool} />
+            <SchoolFormsPanel school={school} />
             <ShopifyOrdersPanel school={school} />
-            <ContactsPanel school={school} />
           </section>
         </aside>
       </div>
@@ -703,21 +683,19 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
       const preview = messageBody.replace(/\s+/g, " ").trim();
       const isOpen = awaitingReply(record, repliedAt);
       const isDismissed = incoming && record.channel === "email" && record.resolution === "no_reply_needed";
-      const isReplied = incoming && record.channel === "email" && !isOpen && !isDismissed;
       const canReopen = isDismissed && (!repliedAt || record.contacted_at > repliedAt);
       const resolving = resolvingId === record.id;
       return <details className={`correspondence-entry ${isNote ? "note" : incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
           <span className="correspondence-avatar" aria-hidden="true">{isNote ? <MessageCircle size={17} /> : incoming ? <Mail size={17} /> : <Send size={16} />}</span>
           <span className="correspondence-summary-copy">
-            <span className="correspondence-kicker"><b>{isNote ? "Note" : incoming ? "Incoming" : "Sent"}</b><span>{isNote ? `Added by ${from}` : incoming ? from : `To ${to}`}</span>{isOpen && <em className="reply-chip open">Awaiting reply</em>}{isReplied && <em className="reply-chip replied">Replied</em>}{isDismissed && <em className="reply-chip dismissed">Resolved — no reply needed</em>}</span>
+            <span className="correspondence-kicker"><b>{isNote ? "Note" : incoming ? "Incoming" : "Sent"}</b><span>{isNote ? `Added by ${from}` : incoming ? from : `To ${to}`}</span>{isOpen && <em className="reply-chip open">Awaiting reply</em>}{isDismissed && <em className="reply-chip dismissed">Resolved — no reply needed</em>}</span>
             <strong>{record.subject || `${isNote ? "Internal" : incoming ? "Incoming" : "Sent"} ${record.channel}`}</strong>
             <small className="correspondence-preview">{preview || "No message preview available"}</small>
           </span>
           <span className="correspondence-summary-time"><time><strong>{date}</strong><small>{time}</small></time><ChevronDown size={17} aria-hidden="true" /></span>
         </summary>
         <div className="correspondence-message">
-          <div className="correspondence-message-heading"><span><MessageCircle size={14} /> {isNote ? "Note details" : "Message details"}</span><small>{isNote ? "Added" : incoming ? "Received" : "Sent"} {date} at {time}</small></div>
           <div className="correspondence-metadata">
             <span><small>From</small><strong>{from}</strong></span>
             {!isNote && <span><small>To</small><strong>{to}</strong></span>}
@@ -730,7 +708,6 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
           {canReopen && <div className="correspondence-resolve-actions">
             <button type="button" className="secondary-button" disabled={resolving} onClick={() => setResolution(record, "reopen")}><Mail size={14} /> {resolving ? "Saving…" : "Reopen — reply still needed"}</button>
           </div>}
-          <div className="correspondence-status"><span>{record.channel}</span><span>{record.status}</span></div>
         </div>
       </details>;
     })}</div> : <div className="empty-panel"><span className="empty-panel-icon"><Mail size={28} /></span><strong>No correspondence recorded</strong><p>Add a note, send an email, or log a call to start this school&apos;s activity history.</p><button className="secondary-button empty-panel-action" onClick={() => setAddingNote(true)}><Plus size={17} /> Add note</button></div>}
@@ -863,7 +840,6 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [selected, setSelected] = useState<School | null>(null);
   const [createSchoolOpen, setCreateSchoolOpen] = useState(false);
   const [editSchool, setEditSchool] = useState<School | null>(null);
-  const [renameSchool, setRenameSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<"overview" | "discounts">("overview");
@@ -1024,8 +1000,8 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     window.location.reload();
   }
 
-  function saveSchool(school: School, code: string, outreachStatus: string) {
-    const updated = { ...school, code, outreachStatus };
+  function saveSchool(school: School, updates: Partial<School>) {
+    const updated = { ...school, ...updates };
     setSchools((current) => current.map((item) => item.id === school.id ? updated : item));
     setSelected((current) => current?.id === school.id ? updated : current);
     setEditSchool(null);
@@ -1087,7 +1063,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onRename={() => setRenameSchool(selected)} onEditSchool={() => setEditSchool(selected)} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">
@@ -1103,15 +1079,14 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
 
         <section ref={schoolsSectionRef} className="schools-section">
           <div className="section-heading"><div><div className="schools-title-row"><h2>Schools</h2><span className="source-badge schools-source-badge"><span /> {dataSource === "supabase" ? "Live from Supabase" : "Workbook import"}</span>{replyNeededCount > 0 && <button className="reply-needed-filter" onClick={() => { setFilter("Reply needed"); setVisibleCount(30); }}><Mail size={14} /> {replyNeededCount} {replyNeededCount === 1 ? "reply" : "replies"} needed</button>}</div><p>See each school&apos;s status, orders, and anything that needs attention.</p></div><div className="table-tools"><button className="primary-button add-school-button" onClick={() => setCreateSchoolOpen(true)}><Plus size={16} /> Add school</button><label className="table-search"><Search size={15} /><input aria-label="Search schools" placeholder="School, contact, email, or code" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} /></label><label className="filter-select"><span>Status:</span><span className="filter-select-value">{filter}</span><select aria-label="Filter by status" value={filter} onChange={(e) => { setFilter(e.target.value); setVisibleCount(30); }}><option>All</option><option>Reply needed</option><option>Flagged for follow-up</option>{outreachStatuses.map((status) => <option key={status.name}>{status.name}</option>)}</select><ChevronDown size={14} /></label></div></div>
-          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Status</th><th>Orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const reasons = attentionReasonsFor(school); const reason = reasons.length > 1 ? `${reasons[0]} · +${reasons.length - 1} more` : reasons[0] || ""; return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={school.outreachStatus} /></td><td>{school.orders2026 ? <strong className="number-cell">{school.orders2026.toLocaleString()}</strong> : <span className="muted-number">—</span>}</td><td>{school.replyPending ? <span className="attention-cell"><span className="attention-reason">{reason}</span><button type="button" className="resolve-button" disabled={resolvingSchoolId === school.id} title="The latest incoming email doesn't need a response" onClick={(event) => { event.stopPropagation(); resolveReplies(school.id); }}><CheckCircle2 size={12} /> {resolvingSchoolId === school.id ? "Resolving…" : "Resolve"}</button></span> : <span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span>}</td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className={`code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status.</p></div>}</div>
+          <div className="school-table-wrap"><table className="school-table"><thead><tr><th>School</th><th>Status</th><th>Orders</th><th>Previous years&apos; orders</th><th>Needs attention</th><th>Last activity</th><th>Code</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{visibleSchools.map((school) => { const reasons = attentionReasonsFor(school); const reason = reasons.length > 1 ? `${reasons[0]} · +${reasons.length - 1} more` : reasons[0] || ""; return <tr key={school.id} data-school-id={school.id} onClick={() => openSchool(school)}><td><div className="school-cell"><Avatar school={school} small /><div><strong>{school.name}</strong><span>{school.admin || school.email || "No contact recorded"}</span></div></div></td><td><OutreachPill status={school.outreachStatus} /></td><td>{school.orders2026 ? <strong className="number-cell">{school.orders2026.toLocaleString()}</strong> : <span className="muted-number">—</span>}</td><td><span className="muted-number">2025: {school.orders2025.toLocaleString()} · 2024: {school.orders2024.toLocaleString()}</span></td><td>{school.replyPending ? <span className="attention-cell"><span className="attention-reason">{reason}</span><button type="button" className="resolve-button" disabled={resolvingSchoolId === school.id} title="The latest incoming email doesn't need a response" onClick={(event) => { event.stopPropagation(); resolveReplies(school.id); }}><CheckCircle2 size={12} /> {resolvingSchoolId === school.id ? "Resolving…" : "Resolve"}</button></span> : <span className={reason ? "attention-reason" : "muted-number"}>{reason || "—"}</span>}</td><td><span className="muted-number">{school.lastContactedAt ? formatDate(school.lastContactedAt) : "No activity"}</span></td><td><span className={`code ${school.code ? "" : "unassigned"}`}>{school.code || "Not assigned"}</span></td><td><button className="row-arrow" aria-label={`Open ${school.name}`}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><Search size={24} /><strong>No schools found</strong><p>Try a different search or status.</p></div>}</div>
           <div ref={loadMoreRef} className="lazy-load-sentinel" aria-live="polite">{hasMore ? `Loading more schools… ${visibleSchools.length.toLocaleString()} of ${filtered.length.toLocaleString()}` : `Showing all ${filtered.length.toLocaleString()} schools`}</div>
         </section>
       </main>}
     </div>
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
     {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
-    {renameSchool && <RenameSchoolModal school={renameSchool} onClose={() => setRenameSchool(null)} onSaved={(name) => { setSchools((current) => current.map((school) => school.id === renameSchool.id ? { ...school, name } : school)); setSelected((current) => current?.id === renameSchool.id ? { ...current, name } : current); setRenameSchool(null); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
-    {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(code, outreachStatus) => saveSchool(editSchool, code, outreachStatus)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
+    {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(updates) => saveSchool(editSchool, updates)} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} />}
   </div>;
 }

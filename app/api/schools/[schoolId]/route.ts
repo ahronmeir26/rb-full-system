@@ -1,5 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/auth";
+import type { SchoolType } from "@/lib/types";
+
+const schoolTypes = new Set<SchoolType>(["regular", "chassidish"]);
+
+function cleanText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return null;
+  const text = value.trim().replace(/\s+/g, " ");
+  return text.length <= maxLength && !/[\u0000-\u001f\u007f]/.test(text) ? text : null;
+}
 
 export async function PATCH(request: Request, context: { params: Promise<{ schoolId: string }> }) {
   const viewer = await getViewer();
@@ -16,22 +25,40 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   const hasName = body && typeof body.name === "string";
   const hasOutreachStatus = body && typeof body.outreachStatus === "string";
   const hasNeedsFollowUp = body && typeof body.needsFollowUp === "boolean";
-  if (!hasCode && !hasName && !hasOutreachStatus && !hasNeedsFollowUp) {
+  const hasSchoolType = body && typeof body.schoolType === "string";
+  const hasDistrict = body && typeof body.district === "string";
+  const hasCity = body && typeof body.city === "string";
+  const hasState = body && typeof body.state === "string";
+  const hasAdmin = body && typeof body.admin === "string";
+  const hasEmail = body && typeof body.email === "string";
+  const hasPhone = body && typeof body.phone === "string";
+  const hasStudents = body && (typeof body.students === "string" || typeof body.students === "number");
+  if (!hasCode && !hasName && !hasOutreachStatus && !hasNeedsFollowUp && !hasSchoolType && !hasDistrict && !hasCity && !hasState && !hasAdmin && !hasEmail && !hasPhone && !hasStudents) {
     return Response.json({ error: "A school update is required." }, { status: 400 });
   }
 
-  const code = hasCode ? body.code.trim() : "";
-  const name = hasName ? body.name.trim() : "";
-  const outreachStatus = hasOutreachStatus ? body.outreachStatus.trim() : "";
-  if (hasCode && (code.length > 64 || /[\u0000-\u001f\u007f]/.test(code))) {
-    return Response.json({ error: "The coupon code must be 64 characters or fewer." }, { status: 400 });
-  }
-  if (hasName && (!name || name.length > 160 || /[\u0000-\u001f\u007f]/.test(name))) {
+  const code = hasCode ? cleanText(body.code, 64) : "";
+  const name = hasName ? cleanText(body.name, 160) : "";
+  const outreachStatus = hasOutreachStatus ? cleanText(body.outreachStatus, 64) : "";
+  const district = hasDistrict ? cleanText(body.district, 120) : "";
+  const city = hasCity ? cleanText(body.city, 120) : "";
+  const state = hasState ? cleanText(body.state, 64) : "";
+  const admin = hasAdmin ? cleanText(body.admin, 160) : "";
+  const email = hasEmail ? cleanText(body.email, 254) : "";
+  const phone = hasPhone ? cleanText(body.phone, 64) : "";
+  const schoolType = hasSchoolType ? body.schoolType as SchoolType : "regular";
+  const students = hasStudents ? (body.students === "" ? 0 : Number(body.students)) : 0;
+  if (hasCode && code === null) return Response.json({ error: "The coupon code must be 64 characters or fewer." }, { status: 400 });
+  if (hasName && (!name || name.length > 160)) {
     return Response.json({ error: "A school name of 160 characters or fewer is required." }, { status: 400 });
   }
-  if (hasOutreachStatus && (!outreachStatus || outreachStatus.length > 64)) {
+  if (hasOutreachStatus && !outreachStatus) {
     return Response.json({ error: "A valid status is required." }, { status: 400 });
   }
+  if ([district, city, state, admin, email, phone].some((value) => value === null)) return Response.json({ error: "One or more fields is invalid." }, { status: 400 });
+  if (hasSchoolType && !schoolTypes.has(schoolType)) return Response.json({ error: "A valid school type is required." }, { status: 400 });
+  if (hasEmail && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return Response.json({ error: "Enter a valid administrator email address." }, { status: 400 });
+  if (hasStudents && (!Number.isInteger(students) || students < 0 || students > 1_000_000)) return Response.json({ error: "Student count must be a whole number between 0 and 1,000,000." }, { status: 400 });
   const url = process.env.SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY;
   if (!url || !secret) {
@@ -60,11 +87,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
     if (!status) return Response.json({ error: "That status does not exist." }, { status: 400 });
   }
 
-  const updates: { name?: string; code?: string | null; outreach_status?: string; needs_follow_up?: boolean } = {};
+  const updates: Record<string, string | number | boolean | null> = {};
   if (hasName) updates.name = name;
   if (hasCode) updates.code = storedCode;
   if (hasOutreachStatus) updates.outreach_status = outreachStatus;
   if (hasNeedsFollowUp) updates.needs_follow_up = body.needsFollowUp;
+  if (hasSchoolType) updates.school_type = schoolType;
+  if (hasDistrict) updates.district = district || null;
+  if (hasCity) updates.city = city || null;
+  if (hasState) updates.state = state || null;
+  if (hasAdmin) updates.admin = admin || null;
+  if (hasEmail) updates.email = email || null;
+  if (hasPhone) updates.phone = phone || null;
+  if (hasStudents) updates.students = students;
   const { data: school, error } = await supabase
     .from("schools")
     .update(updates)
@@ -116,9 +151,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   }
 
   return Response.json({
-    name: hasName ? name : undefined,
-    code: hasCode ? code : undefined,
-    outreachStatus: updates.outreach_status,
-    needsFollowUp: updates.needs_follow_up,
+    ...(hasName ? { name } : {}), ...(hasCode ? { code } : {}), ...(hasOutreachStatus ? { outreachStatus } : {}), ...(hasNeedsFollowUp ? { needsFollowUp: body.needsFollowUp } : {}),
+    ...(hasSchoolType ? { schoolType } : {}), ...(hasDistrict ? { district } : {}), ...(hasCity ? { city } : {}), ...(hasState ? { state } : {}), ...(hasAdmin ? { admin } : {}), ...(hasEmail ? { email } : {}), ...(hasPhone ? { phone } : {}), ...(hasStudents ? { students } : {}),
   });
 }
