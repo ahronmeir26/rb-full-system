@@ -1,4 +1,3 @@
-export type ProgramStage = "Not invited" | "Invited" | "Ordered" | "Complete";
 export type SchoolType = "regular" | "chassidish";
 export type OutreachStatus = {
   name: string;
@@ -57,7 +56,6 @@ export type School = {
   orders2026: number;
   orders2025: number;
   orders2024: number;
-  programStage: ProgramStage;
   progress: number;
   eligibility: string;
   lastContact: string;

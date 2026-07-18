@@ -176,9 +176,9 @@ test("2026 coupon codes start blank and remain admin-editable", async () => {
   assert.match(workbookImporter, /"code": ""/);
   assert.doesNotMatch(supabaseSync, /^\s+code: school\.code/m);
   assert.match(editor, /2026 coupon code/);
-  assert.match(editor, /Edit school/);
-  assert.match(editor, /suggestedCode \? `Add \$\{suggestedCode\}` : "Enter coupon code"/);
-  assert.match(editor, /body: JSON\.stringify\(\{ code: suggestedCode \}\)/);
+  assert.match(editor, /School settings/);
+  assert.match(editor, /aria-label="Edit 2026 coupon code"/);
+  assert.match(editor, /body: JSON\.stringify\(\{ code, outreachStatus \}\)/);
   assert.match(updateRoute, /\.update\(updates\)/);
 });
 
@@ -217,7 +217,6 @@ test("new Supabase schools map missing optional fields to empty values", () => {
   assert.equal(school.city, "");
   assert.equal(school.email, "");
   assert.equal(school.initials, "VA");
-  assert.equal(school.programStage, "Not invited");
   assert.equal(school.replyPending, false);
   assert.equal(school.needsFollowUp, false);
 });
@@ -238,20 +237,22 @@ test("supports custom outreach statuses and complete contact history", async () 
   assert.match(schema, /contacted_at timestamptz not null default now\(\)/);
   assert.match(schema, /update_school_last_contacted_at/);
   assert.match(editor, /Create a custom status/);
-  assert.match(editor, /Complete history/);
+  assert.match(editor, /Correspondence with/);
   assert.match(correspondenceRoute, /\.from\("correspondence"\)\.insert\(rows\.map\(\(row\) => row\.correspondence\)\)/);
   assert.match(correspondenceRoute, /queueKlaviyoOutgoingEmail/);
   assert.match(statusRoute, /\.from\("school_outreach_statuses"\)/);
 });
 
-test("keeps pre-engagement outreach separate and hides program status from the school table", async () => {
+test("uses status as the single school status and removes program stage", async () => {
   const [schema, editor] = await Promise.all([
     readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(schema, /\('Not contacted', true, 0\)/);
   assert.match(schema, /outreach_status set default 'Not contacted'/);
-  assert.doesNotMatch(editor, /<th>Program status<\/th>/);
+  assert.match(schema, /drop column if exists program_stage/);
+  assert.doesNotMatch(editor, /Program stage|Current stage|2026 stage/);
+  assert.match(editor, /<th>Status<\/th>/);
 });
 
 test("assigns semantic colors to built-in and custom outreach statuses", () => {
@@ -264,15 +265,15 @@ test("assigns semantic colors to built-in and custom outreach statuses", () => {
   assert.equal(outreachStatusTone("On hold"), "custom");
 });
 
-test("filters the school list by current program stage", async () => {
+test("filters the school list by status", async () => {
   const [editor, styles] = await Promise.all([
     readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
-  assert.match(editor, /school\.programStage === filter/);
-  assert.match(editor, /<span>Stage:<\/span>/);
+  assert.match(editor, /school\.outreachStatus === filter/);
+  assert.match(editor, /<span>Status:<\/span>/);
   assert.match(editor, /className="filter-select-value">\{filter\}<\/span>/);
-  assert.match(editor, /aria-label="Filter by program stage"/);
+  assert.match(editor, /aria-label="Filter by status"/);
   assert.match(editor, /<option>Flagged for follow-up<\/option>/);
   assert.match(editor, /<option>Reply needed<\/option>/);
   assert.match(styles, /\.filter-select select \{ position: absolute; inset: 0; width: 100%; height: 100%;/);

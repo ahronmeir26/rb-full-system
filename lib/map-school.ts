@@ -1,8 +1,7 @@
-import type { ProgramStage, School, SchoolType } from "./types";
+import type { School, SchoolType } from "./types";
 
 type SchoolRow = Partial<School> & Record<string, unknown>;
 
-const programStages = new Set<ProgramStage>(["Not invited", "Invited", "Ordered", "Complete"]);
 const schoolTypes = new Set<SchoolType>(["regular", "chassidish"]);
 const avatarColors = ["mint", "blue", "peach", "violet", "gold", "rose"];
 
@@ -18,18 +17,6 @@ function schoolInitials(name: string) {
     .map((word) => word[0])
     .join("")
     .toUpperCase();
-}
-
-function programStageFor(row: SchoolRow, orders2026: number, outreachStatus: string): ProgramStage {
-  const stored = String(row.programStage ?? row.program_stage ?? "") as ProgramStage;
-  if (programStages.has(stored)) return stored;
-  // Workbook-era rows only carry the legacy status field.
-  const legacyStatus = String(row.status ?? "");
-  if (legacyStatus === "Complete") return "Complete";
-  if (orders2026 > 0 || legacyStatus === "In progress") return "Ordered";
-  const outreach = outreachStatus.toLowerCase();
-  if (outreach !== "not interested" && /(sent|invite|interested|ready)/.test(outreach)) return "Invited";
-  return "Not invited";
 }
 
 export function mapSchool(row: SchoolRow, index = 0): School {
@@ -59,7 +46,6 @@ export function mapSchool(row: SchoolRow, index = 0): School {
     orders2026,
     orders2025: asNumber(row.orders2025 ?? row.orders_2025),
     orders2024: asNumber(row.orders2024 ?? row.orders_2024),
-    programStage: programStageFor(row, orders2026, outreachStatus),
     progress: asNumber(row.progress),
     eligibility: String(row.eligibility ?? ""),
     lastContact: String(row.lastContact ?? row.last_contact ?? ""),

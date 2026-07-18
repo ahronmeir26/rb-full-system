@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "A valid school type is required." }, { status: 400 });
   }
   if (!outreachStatus) {
-    return Response.json({ error: "An outreach status is required." }, { status: 400 });
+    return Response.json({ error: "A status is required." }, { status: 400 });
   }
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return Response.json({ error: "Enter a valid administrator email address." }, { status: 400 });
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     console.error("Unable to validate the new school", statusLookup.error || codeLookup.error);
     return Response.json({ error: "Unable to validate the school." }, { status: 500 });
   }
-  if (!statusLookup.data) return Response.json({ error: "That outreach status does not exist." }, { status: 400 });
+  if (!statusLookup.data) return Response.json({ error: "That status does not exist." }, { status: 400 });
   if (codeLookup.data) {
     return Response.json({ error: `That 2026 code is already assigned to ${codeLookup.data.name}.` }, { status: 409 });
   }
@@ -100,7 +100,6 @@ export async function POST(request: Request) {
       email: email || null,
       phone: phone || null,
       students,
-      program_stage: "Not invited",
       progress: 0,
       initials: initialsFor(name),
       color: avatarColors[Math.floor(Math.random() * avatarColors.length)],

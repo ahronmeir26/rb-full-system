@@ -30,8 +30,6 @@ create table if not exists public.schools (
   orders_2026 integer not null default 0 check (orders_2026 >= 0),
   orders_2025 integer not null default 0 check (orders_2025 >= 0),
   orders_2024 integer not null default 0 check (orders_2024 >= 0),
-  program_stage text not null default 'Not invited'
-    check (program_stage in ('Not invited', 'Invited', 'Ordered', 'Complete')),
   needs_follow_up boolean not null default false,
   progress integer not null default 0 check (progress between 0 and 100),
   eligibility text,
@@ -135,27 +133,17 @@ alter table public.schools
   add constraint schools_outreach_status_fkey
   foreign key (outreach_status) references public.school_outreach_statuses(name);
 
--- Migrate the legacy status/last_message_direction columns to the stored
--- program stage plus the manual follow-up flag. The legacy 'Needs attention'
--- status meant either "latest email is inbound" (trigger-written, now the
--- derived reply queue) or "manually flagged" (now needs_follow_up).
+-- Migrate the legacy status/last_message_direction columns to the manual
+-- follow-up flag. The legacy 'Needs attention' status meant either "latest
+-- email is inbound" (trigger-written, now the derived reply queue) or
+-- "manually flagged" (now needs_follow_up).
 do $$
 begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'schools' and column_name = 'status'
   ) then
-    alter table public.schools add column if not exists program_stage text;
     alter table public.schools add column if not exists needs_follow_up boolean;
-    update public.schools
-    set program_stage = case
-      when status = 'Complete' then 'Complete'
-      when orders_2026 > 0 or status = 'In progress' then 'Ordered'
-      when lower(outreach_status) <> 'not interested'
-        and lower(outreach_status) ~ '(sent|invite|interested|ready)' then 'Invited'
-      else 'Not invited'
-    end
-    where program_stage is null;
     update public.schools
     set needs_follow_up = (status = 'Needs attention' and coalesce(last_message_direction, '') <> 'inbound')
     where needs_follow_up is null;
@@ -164,20 +152,16 @@ begin
 end;
 $$;
 
-update public.schools set program_stage = 'Not invited' where program_stage is null;
-alter table public.schools alter column program_stage set default 'Not invited';
-alter table public.schools alter column program_stage set not null;
-alter table public.schools drop constraint if exists schools_program_stage_check;
-alter table public.schools
-  add constraint schools_program_stage_check
-  check (program_stage in ('Not invited', 'Invited', 'Ordered', 'Complete'));
 update public.schools set needs_follow_up = false where needs_follow_up is null;
 alter table public.schools alter column needs_follow_up set default false;
 alter table public.schools alter column needs_follow_up set not null;
 alter table public.schools drop constraint if exists schools_last_message_direction_check;
 alter table public.schools drop column if exists last_message_direction;
 drop index if exists public.schools_status_idx;
-create index if not exists schools_program_stage_idx on public.schools (program_stage);
+drop view if exists public.schools_overview;
+drop index if exists public.schools_program_stage_idx;
+alter table public.schools drop constraint if exists schools_program_stage_check;
+alter table public.schools drop column if exists program_stage;
 
 create table if not exists public.school_outreach_status_history (
   id uuid primary key default gen_random_uuid(),
