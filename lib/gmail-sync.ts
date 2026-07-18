@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { decryptGmailToken } from "@/lib/gmail-crypto";
+import { currentEmailBody } from "@/lib/email-body";
 
 export type GmailRuntimeConfig = {
   supabaseUrl: string;
@@ -302,7 +303,7 @@ async function importMessages(
       const contactedAt = message.internalDate && Number.isFinite(Number(message.internalDate))
         ? new Date(Number(message.internalDate)).toISOString()
         : new Date().toISOString();
-      const body = (messageBody(message.payload) || message.snippet || "(No message body)").slice(0, 100_000);
+      const body = currentEmailBody(messageBody(message.payload) || message.snippet || "(No message body)").slice(0, 100_000);
       return schoolsForMessage(message, schools).map((school) => ({
         school_id: school.id,
         direction: isOutbound ? "outbound" : "inbound",
