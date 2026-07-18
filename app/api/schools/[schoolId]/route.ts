@@ -13,19 +13,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
 
   const body = await request.json().catch(() => null);
   const hasCode = body && typeof body.code === "string";
+  const hasName = body && typeof body.name === "string";
   const hasOutreachStatus = body && typeof body.outreachStatus === "string";
   const hasProgramStage = body && typeof body.programStage === "string";
   const hasNeedsFollowUp = body && typeof body.needsFollowUp === "boolean";
-  if (!hasCode && !hasOutreachStatus && !hasProgramStage && !hasNeedsFollowUp) {
-    return Response.json({ error: "A coupon code, outreach status, program stage, or follow-up flag is required." }, { status: 400 });
+  if (!hasCode && !hasName && !hasOutreachStatus && !hasProgramStage && !hasNeedsFollowUp) {
+    return Response.json({ error: "A school update is required." }, { status: 400 });
   }
 
   const code = hasCode ? body.code.trim() : "";
+  const name = hasName ? body.name.trim() : "";
   const outreachStatus = hasOutreachStatus ? body.outreachStatus.trim() : "";
   const programStage = hasProgramStage ? body.programStage.trim() : "";
   const programStages = new Set(["Not invited", "Invited", "Ordered", "Complete"]);
   if (hasCode && (code.length > 64 || /[\u0000-\u001f\u007f]/.test(code))) {
     return Response.json({ error: "The coupon code must be 64 characters or fewer." }, { status: 400 });
+  }
+  if (hasName && (!name || name.length > 160 || /[\u0000-\u001f\u007f]/.test(name))) {
+    return Response.json({ error: "A school name of 160 characters or fewer is required." }, { status: 400 });
   }
   if (hasOutreachStatus && (!outreachStatus || outreachStatus.length > 64)) {
     return Response.json({ error: "A valid outreach status is required." }, { status: 400 });
@@ -62,7 +67,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
     if (!status) return Response.json({ error: "That outreach status does not exist." }, { status: 400 });
   }
 
-  const updates: { code?: string | null; outreach_status?: string; program_stage?: string; needs_follow_up?: boolean } = {};
+  const updates: { name?: string; code?: string | null; outreach_status?: string; program_stage?: string; needs_follow_up?: boolean } = {};
+  if (hasName) updates.name = name;
   if (hasCode) updates.code = storedCode;
   if (hasOutreachStatus) updates.outreach_status = outreachStatus;
   if (hasProgramStage) updates.program_stage = programStage;
@@ -118,6 +124,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ schoo
   }
 
   return Response.json({
+    name: hasName ? name : undefined,
     code: hasCode ? code : undefined,
     outreachStatus: updates.outreach_status,
     programStage: updates.program_stage,

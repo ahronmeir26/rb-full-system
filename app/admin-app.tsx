@@ -307,6 +307,22 @@ function RenameSchoolModal({ school, onClose, onSaved }: { school: School; onClo
   return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><form className="modal rename-school-modal" role="dialog" aria-modal="true" aria-labelledby="rename-school-title" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">School name</p><h2 id="rename-school-title">Rename school</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div><label className="rename-school-field"><span>Name</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={160} required /></label>{error && <div className="login-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={loading || !name.trim()}>{loading ? "Saving…" : "Save name"}</button></div></form></div>;
 }
 
+function ProgramSettingsPanel({ school, statuses, onSchoolChanged }: { school: School; statuses: OutreachStatus[]; onSchoolChanged: (updates: Partial<School>) => void }) {
+  const [code, setCode] = useState(school.code);
+  const [outreachStatus, setOutreachStatus] = useState(school.outreachStatus);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); setSaving(true); setError("");
+    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, outreachStatus }) });
+    const result = await response.json().catch(() => null);
+    setSaving(false);
+    if (!response.ok) return setError(result?.error || "Unable to save school settings.");
+    onSchoolChanged({ code: result.code, outreachStatus: result.outreachStatus });
+  }
+  return <section className="panel school-settings-panel"><div className="sidebar-panel-heading"><p className="eyebrow">Program</p><h2>School settings</h2></div><form className="sidebar-settings-form" onSubmit={save}><label><span>Outreach status</span><select value={outreachStatus} onChange={(event) => setOutreachStatus(event.target.value)}>{statuses.map((status) => <option key={status.name}>{status.name}</option>)}</select></label><label><span>2026 coupon code</span><input value={code} onChange={(event) => setCode(event.target.value)} maxLength={64} /></label>{error && <p className="contact-error">{error}</p>}<button className="secondary-button" disabled={saving}>{saving ? "Saving…" : "Save settings"}</button></form></section>;
+}
+
 function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
   const contactName = school.admin || "school administrator";
   const [contacts, setContacts] = useState<Array<{ id: string; name: string | null; email: string; title: string }>>([]);
@@ -576,7 +592,7 @@ function SchoolFormsPanel({ school, onSchoolChanged }: {
   </section>;
 }
 
-function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack, onRename, onSchoolChanged, onCorrespondenceChanged, onResolveReplies }: { school: School; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onRename: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void }) {
+function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onRename, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onRename: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
   const [savingStage, setSavingStage] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
@@ -632,6 +648,7 @@ function SchoolDetail({ school, correspondenceVersion, resolvingReplies, onBack,
               <div className="school-data-item"><span>Location</span><strong>{location}</strong></div>
             </div>
           </section>
+          <ProgramSettingsPanel key={school.id} school={school} statuses={statuses} onSchoolChanged={onSchoolChanged} />
           <SchoolFormsPanel school={school} onSchoolChanged={onSchoolChanged} />
           <section className="panel school-orders-panel">
             <div className="sidebar-panel-heading"><p className="eyebrow">Program activity</p><h2>Order history</h2></div>
@@ -1100,7 +1117,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onRename={() => setRenameSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected(updated); }} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onRename={() => setRenameSchool(selected)} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">

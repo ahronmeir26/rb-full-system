@@ -490,6 +490,11 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .school-data-grid .school-data-item:nth-last-child(-n + 2) { border-bottom: 0; }
 .school-year-list { border-top: 1px solid var(--line-soft); }
 .order-form-download { width: 100%; margin-top: 16px; justify-content: center; }
+.sidebar-settings-form { display: grid; gap: 12px; }
+.sidebar-settings-form label { display: grid; gap: 6px; color: #65706b; font-size: 10px; font-weight: 700; }
+.sidebar-settings-form input, .sidebar-settings-form select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; font-size: 12px; }
+.sidebar-settings-form input { font-family: var(--font-geist-mono), monospace; }
+.sidebar-settings-form .secondary-button { justify-content: center; }
 .school-year-row { min-height: 70px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: 48px minmax(84px, 1fr) auto; align-items: center; gap: 10px; }
 .school-year-row:last-child { border-bottom: 0; }
 .school-year-row > strong { color: #303835; font-size: 19px; letter-spacing: -.025em; }
