@@ -479,6 +479,9 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .compact-sidebar-card { padding: 2px; border: 0; display: grid; gap: 12px; overflow: visible; background: transparent; box-shadow: none; }
 .sidebar-compact-section { padding: 18px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, .82); box-shadow: 0 5px 18px rgba(50, 57, 53, .055); }
 .compact-school-summary { padding: 18px; background: #f7f9f7; }
+.sidebar-attention { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(155, 145, 139, .24); display: grid; gap: 7px; }
+.sidebar-attention > span { color: #78827e; text-transform: uppercase; letter-spacing: .075em; font-size: 8px; font-weight: 760; }
+.sidebar-attention .detail-attention { gap: 6px; }
 .compact-sidebar-title, .compact-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .compact-sidebar-title { margin-bottom: 9px; }
 .compact-sidebar-title .eyebrow { margin-bottom: 3px; font-size: 8px; }

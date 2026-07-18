@@ -583,10 +583,6 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
                 </div>
               </dl></div>
             </div>
-            {(school.replyPending || school.needsFollowUp) && <div className="detail-attention" aria-label="Items needing attention">
-              {school.replyPending && <><span className="status reply-needed"><Mail size={13} /> Reply needed</span><button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button></>}
-              {school.needsFollowUp && <span className="status follow-up"><Flag size={13} /> Follow-up</span>}
-            </div>}
           </div>
         </div>
       </div>
@@ -595,6 +591,13 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
         <aside className="detail-sidebar" aria-label="School details">
           <section className="panel compact-sidebar-card">
             <section className="sidebar-compact-section compact-school-summary">
+              {(school.replyPending || school.needsFollowUp) && <div className="sidebar-attention" aria-label="Items needing attention">
+                <span>Needs attention</span>
+                <div className="detail-attention">
+                  {school.replyPending && <><span className="status reply-needed"><Mail size={13} /> Reply needed</span><button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button></>}
+                  {school.needsFollowUp && <span className="status follow-up"><Flag size={13} /> Follow-up</span>}
+                </div>
+              </div>}
               <div className="school-data-grid">
                 <div className="school-data-item"><button type="button" className={`follow-up-toggle ${school.needsFollowUp ? "active" : ""}`} disabled={savingFollowUp} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}><Flag size={23} /><span>Follow up</span></button></div>
                 <div className="school-data-item compact-contact-summary"><div><span>Administrator</span><strong>{school.admin || "Not provided"}</strong></div><div><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div><div><span>Email</span><small>{school.email || "Email not provided"}</small></div></div>
