@@ -520,9 +520,20 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .recipient-search { min-height: 38px; margin-top: 12px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; gap: 8px; color: #7b8581; background: #faf9f8; }
 .recipient-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; font-size: 10px; }
 .mass-recipient-list { min-height: 0; margin: 10px -5px 0 0; padding-right: 5px; flex: 1 1 auto; overflow-y: auto; scrollbar-gutter: stable; }
-.mass-recipient-row { min-height: 56px; padding: 8px 7px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: 16px 30px minmax(0, 1fr) auto; align-items: center; gap: 8px; cursor: pointer; }
+.mass-recipient-item { position: relative; border-bottom: 1px solid var(--line-soft); }
+.mass-recipient-row { min-height: 56px; padding: 8px 7px; display: grid; grid-template-columns: 16px 30px minmax(0, 1fr) auto; align-items: center; gap: 8px; cursor: pointer; }
 .mass-recipient-row:hover { background: #faf9f8; }
 .mass-recipient-row[data-excluded="true"] { opacity: .55; }
+.mass-recipient-copy em { color: #56735f; font-size: 8px; font-style: normal; font-weight: 700; }
+.recipient-edit-button { margin: -3px 7px 8px 61px; padding: 0; border: 0; color: #3f7098; background: transparent; font: inherit; font-size: 9px; font-weight: 700; text-align: left; cursor: pointer; }
+.recipient-edit-button:hover { color: #244e70; text-decoration: underline; }
+.recipient-email-editor { margin: 0 7px 10px 61px; padding: 10px; display: grid; gap: 8px; border: 1px solid #d3e0ea; border-radius: 8px; background: #f6fafc; }
+.recipient-email-editor p { margin: 0; display: grid; gap: 3px; }
+.recipient-email-editor p strong { color: #334f63; font-size: 9px; }
+.recipient-email-editor p span { color: #72817b; font-size: 8px; line-height: 1.4; }
+.recipient-email-editor label { display: grid; gap: 4px; color: #5d6964; font-size: 8px; font-weight: 700; }
+.recipient-email-editor input, .recipient-email-editor textarea { width: 100%; min-width: 0; padding: 7px; border: 1px solid #c8d6df; border-radius: 6px; color: #33423c; background: #fff; font: inherit; font-size: 9px; }
+.recipient-email-editor textarea { min-height: 90px; resize: vertical; line-height: 1.45; }
 .mass-recipient-row .school-avatar.small { width: 30px; height: 30px; font-size: 8px; }
 .mass-recipient-row .outreach-pill { max-width: 100px; overflow: hidden; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .recipient-empty { min-height: 250px; display: grid; place-items: center; align-content: center; gap: 7px; color: #89928e; text-align: center; }

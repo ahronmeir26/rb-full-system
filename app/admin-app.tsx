@@ -453,6 +453,16 @@ function hasValidEmail(school: School) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(school.email.trim());
 }
 
+function unavailablePlaceholders(subject: string, message: string, school: School) {
+  const used = new Set(Array.from(`${subject}\n${message}`.matchAll(/\{([^{}]+)\}/g), ([, name]) => name));
+  return [...used].filter((name) => {
+    if (name === "school") return !school.name.trim();
+    if (name === "firstName") return !school.admin.trim();
+    if (name === "code" || name === "orderLink") return !school.code.trim();
+    return true;
+  });
+}
+
 function MassEmailModal({ schools, statuses, onClose, onSent }: {
   schools: School[];
   statuses: OutreachStatus[];
@@ -474,6 +484,8 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [recipientSearch, setRecipientSearch] = useState("");
+  const [recipientDrafts, setRecipientDrafts] = useState<Record<number, { subject: string; message: string }>>({});
+  const [editingRecipientId, setEditingRecipientId] = useState<number | null>(null);
   const [reviewed, setReviewed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -484,9 +496,15 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
       .sort((left, right) => left.name.localeCompare(right.name)),
     [schools, selectedStatuses],
   );
+  const emailForSchool = useCallback((school: School) => recipientDrafts[school.id] ?? { subject, message }, [message, recipientDrafts, subject]);
+  const missingForSchool = useCallback((school: School) => {
+    const email = emailForSchool(school);
+    return unavailablePlaceholders(email.subject, email.message, school);
+  }, [emailForSchool]);
+  const canReceiveEmail = useCallback((school: School) => hasValidEmail(school) && missingForSchool(school).length === 0, [missingForSchool]);
   const selectedSchools = useMemo(
-    () => matchedSchools.filter((school) => selectedSchoolIds.has(school.id) && hasValidEmail(school)),
-    [matchedSchools, selectedSchoolIds],
+    () => matchedSchools.filter((school) => selectedSchoolIds.has(school.id) && canReceiveEmail(school)),
+    [canReceiveEmail, matchedSchools, selectedSchoolIds],
   );
   const missingEmailCount = matchedSchools.filter((school) => !hasValidEmail(school)).length;
   const visibleRecipients = useMemo(() => {
@@ -496,6 +514,16 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
       `${school.name} ${school.admin} ${school.email} ${school.outreachStatus}`.toLowerCase().includes(query),
     );
   }, [matchedSchools, recipientSearch]);
+
+  useEffect(() => {
+    setSelectedSchoolIds((current) => {
+      const next = new Set([...current].filter((id) => {
+        const school = schools.find((item) => item.id === id);
+        return school && canReceiveEmail(school);
+      }));
+      return next.size === current.size ? current : next;
+    });
+  }, [canReceiveEmail, schools]);
 
   const loadTemplates = useCallback(async () => {
     setTemplateLoading(true);
@@ -548,7 +576,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
       schools
         .filter((school) => school.outreachStatus === statusName)
         .forEach((school) => {
-          if (selecting && hasValidEmail(school)) nextIds.add(school.id);
+          if (selecting && canReceiveEmail(school)) nextIds.add(school.id);
           else nextIds.delete(school.id);
         });
       return nextIds;
@@ -558,7 +586,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
   function selectAllStatuses() {
     setReviewed(false);
     setSelectedStatuses(new Set(statusOptions));
-    setSelectedSchoolIds(new Set(schools.filter(hasValidEmail).map((school) => school.id)));
+    setSelectedSchoolIds(new Set(schools.filter(canReceiveEmail).map((school) => school.id)));
   }
 
   function clearStatuses() {
@@ -575,6 +603,18 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
       else next.add(schoolId);
       return next;
     });
+  }
+
+  function startEditingRecipient(school: School) {
+    const current = emailForSchool(school);
+    setRecipientDrafts((drafts) => ({
+      ...drafts,
+      [school.id]: drafts[school.id] ?? {
+        subject: current.subject,
+        message: current.message,
+      },
+    }));
+    setEditingRecipientId(school.id);
   }
 
   function composeFrom(template: EmailTemplate | null) {
@@ -595,6 +635,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
         schoolIds: selectedSchools.map((school) => school.id),
         subject,
         message,
+        recipientDrafts: Object.fromEntries(selectedSchools.filter((school) => recipientDrafts[school.id]).map((school) => [school.id, recipientDrafts[school.id]])),
       }),
     });
     const result = await response.json().catch(() => null);
@@ -718,14 +759,22 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
               {selectedStatuses.size > 0 && visibleRecipients.length === 0 && <div className="recipient-empty"><Search size={22} /><strong>No schools found</strong><span>Try a different recipient search.</span></div>}
               {visibleRecipients.map((school) => {
                 const validEmail = hasValidEmail(school);
-                const checked = validEmail && selectedSchoolIds.has(school.id);
+                const missing = missingForSchool(school);
+                const canReceive = validEmail && missing.length === 0;
+                const checked = canReceive && selectedSchoolIds.has(school.id);
+                const editing = editingRecipientId === school.id;
+                const individualized = Boolean(recipientDrafts[school.id]);
                 return (
-                  <label className="mass-recipient-row" data-excluded={!validEmail || !checked} key={school.id}>
-                    <input type="checkbox" checked={checked} disabled={!validEmail} onChange={() => toggleSchool(school.id)} />
+                  <div className="mass-recipient-item" key={school.id}>
+                  <label className="mass-recipient-row" data-excluded={!canReceive || !checked}>
+                    <input type="checkbox" checked={checked} disabled={!canReceive} onChange={() => toggleSchool(school.id)} />
                     <Avatar school={school} small />
-                    <span className="mass-recipient-copy"><strong>{school.name}</strong><small>{validEmail ? `${school.admin ? `${school.admin} · ` : ""}${school.email}` : "Excluded · no email address"}</small></span>
+                    <span className="mass-recipient-copy"><strong>{school.name}</strong><small>{!validEmail ? "Excluded · no email address" : missing.length ? `Excluded · missing ${missing.map((name) => `{${name}}`).join(", ")}` : `${school.admin ? `${school.admin} · ` : ""}${school.email}`}</small>{individualized && <em>Individual email edited</em>}</span>
                     <OutreachPill status={school.outreachStatus} />
                   </label>
+                  {validEmail && (missing.length > 0 || individualized) && <button type="button" className="recipient-edit-button" onClick={() => editing ? setEditingRecipientId(null) : startEditingRecipient(school)}>{editing ? "Close editor" : "Edit this email"}</button>}
+                  {editing && <div className="recipient-email-editor"><p><strong>Individual email for {school.name}</strong><span>Edit this version to remove or replace unavailable placeholders, then select the school.</span></p><label><span>Subject</span><input value={emailForSchool(school).subject} maxLength={250} onChange={(event) => { setReviewed(false); setRecipientDrafts((drafts) => ({ ...drafts, [school.id]: { ...emailForSchool(school), subject: event.target.value } })); }} /></label><label><span>Message</span><textarea value={emailForSchool(school).message} maxLength={20_000} onChange={(event) => { setReviewed(false); setRecipientDrafts((drafts) => ({ ...drafts, [school.id]: { ...emailForSchool(school), message: event.target.value } })); }} /></label></div>}
+                  </div>
                 );
               })}
             </div>

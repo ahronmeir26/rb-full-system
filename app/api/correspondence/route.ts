@@ -152,6 +152,9 @@ export async function POST(request: Request) {
     : [];
   const subject = typeof body?.subject === "string" ? body.subject.trim() : "";
   const message = typeof body?.message === "string" ? body.message.trim() : "";
+  const recipientDrafts = body?.recipientDrafts && typeof body.recipientDrafts === "object" && !Array.isArray(body.recipientDrafts)
+    ? body.recipientDrafts as Record<string, unknown>
+    : {};
   const recipientEmail = typeof body?.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
   if (!schoolIds.length || schoolIds.length > 1000) {
     return Response.json({ error: "Between 1 and 1,000 schools are required." }, { status: 400 });
@@ -185,9 +188,17 @@ export async function POST(request: Request) {
     .map((school) => ({ ...school, recipientEmail: recipientEmail || school.email }))
     .filter((school) => school.recipientEmail?.includes("@"))
     .map((school) => {
+      const draft = recipientDrafts[String(school.id)];
+      const draftSubject = draft && typeof draft === "object" && typeof (draft as { subject?: unknown }).subject === "string"
+        ? (draft as { subject: string }).subject.trim()
+        : subject;
+      const draftMessage = draft && typeof draft === "object" && typeof (draft as { message?: unknown }).message === "string"
+        ? (draft as { message: string }).message.trim()
+        : message;
+      if (!draftSubject || draftSubject.length > 250 || !draftMessage || draftMessage.length > 20_000) return null;
       const eventId = crypto.randomUUID();
-      const personalizedSubject = fillSchoolTemplate(subject, school, discountProgram.orderLinkTemplate);
-      const personalizedMessage = fillSchoolTemplate(message, school, discountProgram.orderLinkTemplate);
+      const personalizedSubject = fillSchoolTemplate(draftSubject, school, discountProgram.orderLinkTemplate);
+      const personalizedMessage = fillSchoolTemplate(draftMessage, school, discountProgram.orderLinkTemplate);
       return {
         correspondence: {
           id: crypto.randomUUID(),
@@ -215,7 +226,8 @@ export async function POST(request: Request) {
           schoolName: school.name,
         } satisfies KlaviyoOutgoingEmail,
       };
-    });
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
   if (!rows.length) return Response.json({ error: "No selected schools have an email address." }, { status: 400 });
 
   const { error } = await supabase.from("correspondence").insert(rows.map((row) => row.correspondence));
