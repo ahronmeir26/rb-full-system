@@ -34,6 +34,7 @@ import type { Viewer } from "@/lib/auth";
 import { outreachStatusTone } from "@/lib/outreach-status";
 import { currentEmailBody } from "@/lib/email-body";
 import { initial2026SchoolCode } from "@/lib/school-code";
+import { orderLinkForSchool } from "@/lib/order-link";
 import { DiscountsSection } from "./discounts-section";
 import { EmailTemplateManager, fetchEmailTemplates } from "./email-template-manager";
 
@@ -90,12 +91,12 @@ function attentionReasonsFor(school: School) {
   return reasons;
 }
 
-function fillTemplate(value: string, school: School, contactName: string) {
+function fillTemplate(value: string, school: School, contactName: string, orderLinkTemplate: string) {
   return value
     .replaceAll("{firstName}", (contactName || "there").split(" ")[0])
     .replaceAll("{school}", school.name)
     .replaceAll("{code}", school.code || "your school code")
-    .replaceAll("{orderLink}", school.code ? `https://aistone.com/rb?discount=${encodeURIComponent(school.code)}` : "https://aistone.com/rb");
+    .replaceAll("{orderLink}", orderLinkForSchool(orderLinkTemplate, school.code));
 }
 
 function OrderFormDownload({ school, className = "secondary-button", compact = false }: { school: School; className?: string; compact?: boolean }) {
@@ -320,7 +321,7 @@ function CouponCodeModal({ school, onClose, onSaved }: { school: School; onClose
   </div>;
 }
 
-function EmailModal({ school, onClose, onSent }: { school: School; onClose: () => void; onSent: () => void }) {
+function EmailModal({ school, orderLinkTemplate, onClose, onSent }: { school: School; orderLinkTemplate: string; onClose: () => void; onSent: () => void }) {
   const contactName = school.admin || "school administrator";
   const [contacts, setContacts] = useState<Array<{ id: string; name: string | null; email: string; title: string }>>([]);
   const [recipientEmail, setRecipientEmail] = useState(school.email);
@@ -361,8 +362,8 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
     const selectedContact = contacts.find((contact) => contact.email === recipientEmail);
     const nameForTemplate = selectedContact?.name || contactName;
     setSelectedTemplate(template);
-    setSubject(template ? fillTemplate(template.subject, school, nameForTemplate) : "");
-    setMessage(template ? fillTemplate(template.body, school, nameForTemplate) : "");
+    setSubject(template ? fillTemplate(template.subject, school, nameForTemplate, orderLinkTemplate) : "");
+    setMessage(template ? fillTemplate(template.body, school, nameForTemplate, orderLinkTemplate) : "");
     setError("");
     setStage("compose");
   }
@@ -1329,6 +1330,7 @@ function SettingsModal({ email, onClose, onCorrespondenceChanged, onManageEmailT
 
 export function AdminApp({ initialSchools, initialOutreachStatuses, initialDiscountProgram, dataSource, viewer }: { initialSchools: School[]; initialOutreachStatuses: OutreachStatus[]; initialDiscountProgram: DiscountProgram; dataSource: "supabase" | "workbook"; viewer: Viewer }) {
   const [schools, setSchools] = useState(initialSchools);
+  const [discountProgram, setDiscountProgram] = useState(initialDiscountProgram);
   const [outreachStatuses, setOutreachStatuses] = useState(initialOutreachStatuses);
   const [selected, setSelected] = useState<School | null>(null);
   const [createSchoolOpen, setCreateSchoolOpen] = useState(false);
@@ -1562,7 +1564,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
         </div>
       </header>
 
-      {section === "discounts" ? <DiscountsSection initialProgram={initialDiscountProgram} assignedSchoolCodes={assignedSchoolCodes} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEdit={() => setEditSchool(selected)} onEditCode={() => setCouponCodeSchool(selected)} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} /> : <main className="content">
+      {section === "discounts" ? <DiscountsSection initialProgram={discountProgram} assignedSchoolCodes={assignedSchoolCodes} onProgramSaved={setDiscountProgram} /> : selected ? <SchoolDetail school={selected} statuses={outreachStatuses} correspondenceVersion={correspondenceVersion} resolvingReplies={resolvingSchoolId === selected.id} onBack={returnToSchoolList} onEdit={() => setEditSchool(selected)} onEditCode={() => setCouponCodeSchool(selected)} onEmail={() => setEmailSchool(selected)} onResolveReplies={() => resolveReplies(selected.id)} onCorrespondenceChanged={() => setCorrespondenceVersion((version) => version + 1)} onSchoolChanged={(updates) => { const updated = { ...selected, ...updates }; setSchools((current) => current.map((school) => school.id === updated.id ? { ...school, ...updates } : school)); setSelected(updated); }} onStatusCreated={(status) => setOutreachStatuses((current) => current.some((item) => item.name === status.name) ? current : [...current, status])} /> : <main className="content">
         <div className="page-heading overview-heading">
           <div><p className="eyebrow">Admin · Program year 2026</p><h1>Welcome, {viewer.displayName}</h1><p>Manage every school, program record, form, and communication from one place.</p></div>
           <section className="stats-grid" aria-label="Program summary">
@@ -1584,7 +1586,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       </main>}
     </div>
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
-    {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent("1 email was queued and the school timeline was updated."); setCorrespondenceVersion((version) => version + 1); }} />}
+    {emailSchool && <EmailModal school={emailSchool} orderLinkTemplate={discountProgram.orderLinkTemplate} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent("1 email was queued and the school timeline was updated."); setCorrespondenceVersion((version) => version + 1); }} />}
     {massEmailOpen && <MassEmailModal schools={schools} statuses={outreachStatuses} onClose={() => setMassEmailOpen(false)} onSent={(queued) => { setMassEmailOpen(false); setSent(`${queued.toLocaleString()} personalized email${queued === 1 ? " was" : "s were"} queued successfully.`); setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
     {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onManageEmailTemplates={() => { setSettingsOpen(false); setTemplateManagerOpen(true); }} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
     {templateManagerOpen && <EmailTemplateManager onClose={() => setTemplateManagerOpen(false)} />}

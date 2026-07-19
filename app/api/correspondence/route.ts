@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/auth";
+import { loadDiscountProgram } from "@/lib/discount-program";
+import { orderLinkForSchool } from "@/lib/order-link";
 import {
   klaviyoConfigFromEnvironment,
   klaviyoConfigured,
@@ -18,13 +20,11 @@ function fillSchoolTemplate(value: string, school: {
   name: string;
   admin: string | null;
   code: string | null;
-}) {
+}, orderLinkTemplate: string) {
   const firstName = (school.admin?.trim() || "there").split(/\s+/)[0];
   const schoolCode = school.code?.trim() || "";
   const code = schoolCode || "your school code";
-  const orderLink = schoolCode
-    ? `https://aistone.com/rb?discount=${encodeURIComponent(schoolCode)}`
-    : "https://aistone.com/rb";
+  const orderLink = orderLinkForSchool(orderLinkTemplate, schoolCode);
   return value
     .replaceAll("{firstName}", firstName)
     .replaceAll("{school}", school.name)
@@ -176,6 +176,7 @@ export async function POST(request: Request) {
     console.error("Unable to load correspondence recipients", schoolError);
     return Response.json({ error: "Unable to load recipients." }, { status: 500 });
   }
+  const discountProgram = await loadDiscountProgram();
 
   const contactedAt = new Date().toISOString();
   const requestedRecipientIsValid = !recipientEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail);
@@ -185,8 +186,8 @@ export async function POST(request: Request) {
     .filter((school) => school.recipientEmail?.includes("@"))
     .map((school) => {
       const eventId = crypto.randomUUID();
-      const personalizedSubject = fillSchoolTemplate(subject, school);
-      const personalizedMessage = fillSchoolTemplate(message, school);
+      const personalizedSubject = fillSchoolTemplate(subject, school, discountProgram.orderLinkTemplate);
+      const personalizedMessage = fillSchoolTemplate(message, school, discountProgram.orderLinkTemplate);
       return {
         correspondence: {
           id: crypto.randomUUID(),

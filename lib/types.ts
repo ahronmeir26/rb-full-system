@@ -20,6 +20,7 @@ export type DiscountProgram = {
   programYear: number;
   title: string;
   mainCode: string;
+  orderLinkTemplate: string;
   mensCollectionId: string;
   mensCollectionTitle: string;
   mensDiscountType: DiscountValueType;

@@ -371,6 +371,8 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .discount-settings-head h2 { margin: 0; letter-spacing: -.03em; font-size: 20px; }
 .discount-settings-head p:not(.eyebrow) { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
 .discount-settings-grid { margin-top: 22px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 16px; }
+.discount-field-wide { grid-column: span 2; }
+.discount-field-wide small { color: var(--muted); font-size: 10px; font-weight: 500; }
 .discount-field { min-width: 0; display: grid; gap: 7px; color: #4d5753; font-size: 10px; font-weight: 700; }
 .discount-field > input, .discount-field > select { width: 100%; height: 43px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; outline: none; color: var(--ink); background: #fff; font-size: 12px; }
 .discount-field > input:focus, .discount-field > select:focus { border-color: #9bb9d7; box-shadow: 0 0 0 3px rgba(171,202,233,.22); }
@@ -544,6 +546,7 @@ button:disabled { cursor: not-allowed; opacity: .56; }
   .detail-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .contact-card { grid-row: auto; }
   .discount-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .discount-field-wide { grid-column: span 2; }
   .mass-email-workspace { overflow-y: auto; grid-template-columns: 245px minmax(0, 1fr); grid-template-rows: minmax(500px, auto) 390px; }
   .mass-recipient-panel { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0 !important; }
   .mass-recipient-list { min-height: 190px; }
@@ -608,6 +611,7 @@ button:disabled { cursor: not-allowed; opacity: .56; }
   .discount-page-heading .heading-actions button { width: 100%; }
   .discount-settings-head { flex-direction: column; }
   .discount-settings-grid { grid-template-columns: 1fr; }
+  .discount-field-wide { grid-column: auto; }
   .discount-value-row { grid-template-columns: 1fr; }
   .mass-email-backdrop { padding: 0; }
   .mass-email-modal { width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; }

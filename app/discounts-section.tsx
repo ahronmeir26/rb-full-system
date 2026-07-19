@@ -142,9 +142,11 @@ function ProductGroupCard({
 export function DiscountsSection({
   initialProgram,
   assignedSchoolCodes,
+  onProgramSaved,
 }: {
   initialProgram: DiscountProgram;
   assignedSchoolCodes: number;
+  onProgramSaved: (program: DiscountProgram) => void;
 }) {
   const [program, setProgram] = useState(initialProgram);
   const [collections, setCollections] = useState<ShopifyCollection[]>([]);
@@ -208,6 +210,7 @@ export function DiscountsSection({
       return null;
     }
     setProgram(result.program);
+    onProgramSaved(result.program);
     if (showConfirmation) setMessage("2026 discount settings saved in Supabase.");
     return result.program as DiscountProgram;
   }
@@ -272,6 +275,7 @@ export function DiscountsSection({
         <div className="discount-settings-grid">
           <label className="discount-field"><span>Program title</span><input value={program.title} maxLength={120} onChange={(event) => update("title", event.target.value)} /></label>
           <label className="discount-field"><span>Main program code</span><input className="code-input" value={program.mainCode} maxLength={64} placeholder="APPRECIATION2026" onChange={(event) => update("mainCode", event.target.value.toUpperCase().replace(/\s/g, ""))} /></label>
+          <label className="discount-field discount-field-wide"><span>Order-link template</span><input value={program.orderLinkTemplate} maxLength={2000} placeholder="https://aistone.com/rb?discount={discountCode}" onChange={(event) => update("orderLinkTemplate", event.target.value)} /><small>Use <code>{"{discountCode}"}</code> where each school&apos;s coupon code belongs.</small></label>
           <label className="discount-field"><span>Starts</span><input type="datetime-local" value={dateTimeInputValue(program.startsAt)} onChange={(event) => update("startsAt", dateTimeFromInput(event.target.value))} /></label>
           <label className="discount-field"><span>Ends</span><input type="datetime-local" value={dateTimeInputValue(program.endsAt)} onChange={(event) => update("endsAt", dateTimeFromInput(event.target.value))} /></label>
           <label className="discount-field"><span>Total usage limit</span><input type="number" min="1" placeholder="Unlimited" value={program.usageLimit ?? ""} onChange={(event) => update("usageLimit", event.target.value ? Number(event.target.value) : null)} /></label>

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { DiscountProgram, DiscountSyncStatus, DiscountValueType } from "./types";
+import { DEFAULT_ORDER_LINK_TEMPLATE } from "./order-link";
 
 type DiscountProgramRow = Record<string, unknown>;
 
@@ -8,6 +9,7 @@ export const DEFAULT_DISCOUNT_PROGRAM: DiscountProgram = {
   programYear: 2026,
   title: "2026 Appreciation Program",
   mainCode: "",
+  orderLinkTemplate: DEFAULT_ORDER_LINK_TEMPLATE,
   mensCollectionId: "",
   mensCollectionTitle: "Pre-order men's shirts",
   mensDiscountType: "percentage",
@@ -51,6 +53,7 @@ export function mapDiscountProgram(row?: DiscountProgramRow | null): DiscountPro
     programYear: numberValue(row.program_year, 2026),
     title: String(row.title ?? DEFAULT_DISCOUNT_PROGRAM.title),
     mainCode: String(row.main_code ?? ""),
+    orderLinkTemplate: String(row.order_link_template ?? DEFAULT_ORDER_LINK_TEMPLATE),
     mensCollectionId: String(row.mens_collection_id ?? ""),
     mensCollectionTitle: String(row.mens_collection_title ?? DEFAULT_DISCOUNT_PROGRAM.mensCollectionTitle),
     mensDiscountType: valueType(row.mens_discount_type),
@@ -80,6 +83,7 @@ export function discountProgramToRow(program: DiscountProgram) {
     program_year: 2026,
     title: program.title,
     main_code: program.mainCode || null,
+    order_link_template: program.orderLinkTemplate,
     mens_collection_id: program.mensCollectionId || null,
     mens_collection_title: program.mensCollectionTitle || null,
     mens_discount_type: program.mensDiscountType,
@@ -128,6 +132,7 @@ export function parseDiscountProgramInput(input: unknown, current: DiscountProgr
     ...current,
     title: text("title", current.title),
     mainCode: text("mainCode", current.mainCode).toUpperCase(),
+    orderLinkTemplate: text("orderLinkTemplate", current.orderLinkTemplate),
     mensCollectionId: text("mensCollectionId", current.mensCollectionId),
     mensCollectionTitle: text("mensCollectionTitle", current.mensCollectionTitle),
     mensDiscountType: discountType("mensDiscountType", current.mensDiscountType),
@@ -149,6 +154,12 @@ export function parseDiscountProgramInput(input: unknown, current: DiscountProgr
   if (!program.title || program.title.length > 120) throw new Error("Enter a program title of 120 characters or fewer.");
   if (program.mainCode.length > 64 || /[\s\u0000-\u001f\u007f]/.test(program.mainCode)) {
     throw new Error("The main code must be 64 characters or fewer and cannot contain spaces.");
+  }
+  if (!program.orderLinkTemplate || program.orderLinkTemplate.length > 2_000 || /[\u0000-\u001f\u007f]/.test(program.orderLinkTemplate)) {
+    throw new Error("Enter an order-link template of up to 2,000 characters.");
+  }
+  if (!program.orderLinkTemplate.includes("{discountCode}")) {
+    throw new Error("The order-link template must include {discountCode}.");
   }
   for (const collectionId of [program.mensCollectionId, program.boysCollectionId]) {
     if (collectionId && !/^gid:\/\/shopify\/Collection\/\d+$/.test(collectionId)) {

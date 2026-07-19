@@ -614,6 +614,7 @@ create table if not exists public.discount_programs (
   program_year integer not null check (program_year between 2000 and 2200),
   title text not null,
   main_code text,
+  order_link_template text not null default 'https://aistone.com/rb?discount={discountCode}',
   mens_collection_id text,
   mens_collection_title text,
   mens_discount_type text not null default 'percentage'
@@ -649,6 +650,9 @@ create table if not exists public.discount_programs (
   check (mens_discount_type <> 'percentage' or mens_discount_value <= 100),
   check (boys_discount_type <> 'percentage' or boys_discount_value <= 100)
 );
+
+alter table public.discount_programs
+  add column if not exists order_link_template text not null default 'https://aistone.com/rb?discount={discountCode}';
 
 insert into public.discount_programs (
   program_year,
