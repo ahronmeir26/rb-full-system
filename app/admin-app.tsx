@@ -17,7 +17,6 @@ import {
   LogOut,
   Mail,
   MessageCircle,
-  Pencil,
   Plus,
   RefreshCw,
   RotateCw,
@@ -25,6 +24,7 @@ import {
   Send,
   Settings,
   ShoppingBag,
+  StickyNote,
   Truck,
   X,
 } from "lucide-react";
@@ -547,7 +547,6 @@ function SchoolFormsPanel({ school }: { school: School }) {
 
 function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: School; statuses: OutreachStatus[]; onChanged: (status: string) => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const [open, setOpen] = useState(false);
-  const [otherSelected, setOtherSelected] = useState(false);
   const [customStatus, setCustomStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -556,13 +555,11 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
     function closeOnOutsideClick(event: PointerEvent) {
       if (!menuRef.current?.contains(event.target as Node)) {
         setOpen(false);
-        setOtherSelected(false);
       }
     }
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpen(false);
-        setOtherSelected(false);
       }
     }
     document.addEventListener("pointerdown", closeOnOutsideClick);
@@ -593,48 +590,26 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
       <button
         type="button"
         className="detail-fact-button"
-        data-tone={outreachStatusTone(school.outreachStatus)}
-        onClick={() => { setOpen((current) => !current); setOtherSelected(false); }}
+        onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="status-trigger-dot" aria-hidden="true" />
         {school.outreachStatus}
         <ChevronDown className="status-trigger-chevron" size={14} />
       </button>
       {open && (
         <div className="status-menu-popover">
-          {otherSelected ? (
-            <>
-              <div className="status-menu-heading status-custom-heading">
-                <button type="button" aria-label="Back to statuses" onClick={() => setOtherSelected(false)}><ArrowLeft size={14} /></button>
-                <div><span>Create a status</span><small>Add it and apply it to this school</small></div>
-              </div>
-              <form className="status-custom-form" onSubmit={addStatus}>
-                <label htmlFor="custom-school-status">Status name</label>
-                <input id="custom-school-status" autoFocus value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="e.g. Follow up next week" />
-                <div className="status-custom-actions">
-                  <button type="button" className="status-custom-cancel" disabled={saving} onClick={() => setOtherSelected(false)}>Cancel</button>
-                  <button type="submit" disabled={saving || !customStatus.trim()}>{saving ? "Saving…" : "Create & select"}</button>
-                </div>
-              </form>
-            </>
-          ) : (
-            <>
-              <div className="status-menu-heading"><span>Change status</span><small>Select a new status for this school</small></div>
-              <div className="status-menu-options" role="menu" aria-label="School status">
-                {statuses.map((status) => (
-                  <button type="button" role="menuitemradio" aria-checked={status.name === school.outreachStatus} data-selected={status.name === school.outreachStatus} data-tone={outreachStatusTone(status.name)} disabled={saving} key={status.name} onClick={() => void changeStatus(status.name)}>
-                    <span className="status-option-label"><span className="status-option-dot" aria-hidden="true" />{status.name}</span>
-                    <span className="status-menu-check" aria-hidden="true">✓</span>
-                  </button>
-                ))}
-                <button type="button" className="status-other-option" role="menuitemradio" aria-checked={false} disabled={saving} onClick={() => setOtherSelected(true)}>
-                  <span className="status-option-label"><span className="status-other-icon" aria-hidden="true"><Plus size={12} /></span>Create custom status</span>
-                </button>
-              </div>
-            </>
-          )}
+          <div className="status-menu-options" role="menu" aria-label="School status">
+            {statuses.map((status) => (
+              <button type="button" role="menuitemradio" aria-checked={status.name === school.outreachStatus} data-selected={status.name === school.outreachStatus} disabled={saving} key={status.name} onClick={() => void changeStatus(status.name)}>
+                <span className="status-option-label">{status.name}</span>
+                <span className="status-menu-check" aria-hidden="true">✓</span>
+              </button>
+            ))}
+          </div>
+          <form className="status-custom-form" onSubmit={addStatus}>
+            <input id="custom-school-status" aria-label="Custom status" value={customStatus} disabled={saving} onChange={(event) => setCustomStatus(event.target.value)} maxLength={64} placeholder="Type a custom status…" />
+          </form>
         </div>
       )}
     </div>
@@ -643,7 +618,6 @@ function StatusMenu({ school, statuses, onChanged, onStatusCreated }: { school: 
 
 function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplies, onBack, onEdit, onEditCode, onEmail, onSchoolChanged, onCorrespondenceChanged, onResolveReplies, onStatusCreated }: { school: School; statuses: OutreachStatus[]; correspondenceVersion: number; resolvingReplies: boolean; onBack: () => void; onEdit: () => void; onEditCode: () => void; onEmail: () => void; onSchoolChanged: (updates: Partial<School>) => void; onCorrespondenceChanged: () => void; onResolveReplies: () => void; onStatusCreated: (status: OutreachStatus) => void }) {
   const location = [school.city, school.state].filter(Boolean).join(", ") || "Location not provided";
-  const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [sidebarModal, setSidebarModal] = useState<"forms" | "orders" | null>(null);
 
   useEffect(() => {
@@ -656,11 +630,11 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
   }, [sidebarModal]);
 
   async function toggleFollowUp() {
-    setSavingFollowUp(true);
-    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ needsFollowUp: !school.needsFollowUp }) });
+    const next = !school.needsFollowUp;
+    onSchoolChanged({ needsFollowUp: next });
+    const response = await fetch(`/api/schools/${school.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ needsFollowUp: next }) });
     const result = await response.json().catch(() => null);
-    setSavingFollowUp(false);
-    if (!response.ok) return;
+    if (!response.ok) return onSchoolChanged({ needsFollowUp: !next });
     onSchoolChanged({ needsFollowUp: result.needsFollowUp === true });
   }
 
@@ -669,6 +643,7 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
       <div className="detail-hero">
         <div className="detail-toolbar">
           <button className="back-link" onClick={onBack}><ArrowLeft size={15} /><span>All schools</span></button>
+          <button type="button" className="back-link edit-school-details-button" onClick={onEdit}>Edit school details</button>
         </div>
         <div className="detail-identity">
           <div className="detail-title-copy">
@@ -676,7 +651,6 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
               <div className="detail-name-block">
                 <div className="title-line">
                   <h1>{school.name}</h1>
-                  <button type="button" className="edit-school-button" onClick={onEdit} aria-label="Edit school info" title="Edit school info"><Pencil size={16} /></button>
                 </div>
                 <p className="detail-location"><Building2 size={14} aria-hidden="true" /><span>{[school.district, location].filter(Boolean).join(" · ")}</span></p>
               </div>
@@ -703,15 +677,18 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
         <aside className="detail-sidebar" aria-label="School details">
           <section className="panel compact-sidebar-card">
             <section className="sidebar-compact-section compact-school-summary">
-              {(school.replyPending || school.needsFollowUp) && <div className="sidebar-attention" aria-label="Items needing attention">
+              {school.replyPending && <div className="sidebar-attention" aria-label="Items needing attention">
                 <span>Needs attention</span>
                 <div className="detail-attention">
-                  {school.replyPending && <><span className="status reply-needed"><Mail size={13} /> Reply needed</span><button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button></>}
-                  {school.needsFollowUp && <span className="status follow-up"><Flag size={13} /> Follow-up</span>}
+                  <span className="status reply-needed"><Mail size={13} /> Reply needed</span>
+                  <button type="button" className="resolve-button" disabled={resolvingReplies} title="The latest incoming email doesn't need a response" onClick={onResolveReplies}><CheckCircle2 size={12} /> {resolvingReplies ? "Resolving…" : "Resolve — no reply needed"}</button>
                 </div>
               </div>}
+              <button type="button" className={`followup-toggle ${school.needsFollowUp ? "active" : ""}`} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}>
+                <span className="followup-toggle-text"><Flag size={14} aria-hidden="true" /> Flag for follow-up</span>
+                <span className="followup-switch" aria-hidden="true"><span className="followup-switch-knob" /></span>
+              </button>
               <div className="school-data-grid">
-                <div className="school-data-item"><button type="button" className={`follow-up-toggle ${school.needsFollowUp ? "active" : ""}`} disabled={savingFollowUp} onClick={toggleFollowUp} aria-pressed={school.needsFollowUp}><Flag size={23} /><span>Follow up</span></button></div>
                 <div className="school-data-item compact-contact-summary"><div><span>Administrator</span><strong>{school.admin || "Not provided"}</strong></div><div><span>Phone</span><strong>{school.phone || "Not provided"}</strong></div><div><span>Email</span><small>{school.email || "Email not provided"}</small></div></div>
               </div>
             </section>
@@ -822,9 +799,19 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
       const isDismissed = incoming && record.channel === "email" && record.resolution === "no_reply_needed";
       const canReopen = isDismissed && (!repliedAt || record.contacted_at > repliedAt);
       const resolving = resolvingId === record.id;
-      return <details className={`correspondence-entry ${isNote ? "note" : incoming ? "incoming" : "outgoing"}`} key={record.id}>
+      if (isNote) return <article className="correspondence-entry note" key={record.id}>
+        <div className="correspondence-note">
+          <span className="correspondence-avatar" aria-hidden="true"><StickyNote size={17} /></span>
+          <div className="correspondence-note-copy">
+            <span className="correspondence-kicker"><span>Added by {from}</span></span>
+            <div className="correspondence-body">{record.body?.trim() || "No note content available"}</div>
+          </div>
+          <time className="correspondence-note-time"><strong>{date}</strong><small>{time}</small></time>
+        </div>
+      </article>;
+      return <details className={`correspondence-entry ${incoming ? "incoming" : "outgoing"}`} key={record.id}>
         <summary>
-          <span className="correspondence-avatar" aria-hidden="true">{isNote ? <MessageCircle size={17} /> : incoming ? <Mail size={17} /> : <Send size={16} />}</span>
+          <span className="correspondence-avatar" aria-hidden="true">{incoming ? <Mail size={17} /> : <Send size={16} />}</span>
           <span className="correspondence-summary-copy">
             <span className="correspondence-kicker"><b>{isNote ? "Note" : incoming ? "Incoming" : "Sent"}</b><span>{isNote ? `Added by ${from}` : incoming ? from : `To ${to}`}</span>{isOpen && <em className="reply-chip open">Awaiting reply</em>}{isDismissed && <em className="reply-chip dismissed">Resolved — no reply needed</em>}</span>
             <strong>{record.subject || `${isNote ? "Internal" : incoming ? "Incoming" : "Sent"} ${record.channel}`}</strong>
