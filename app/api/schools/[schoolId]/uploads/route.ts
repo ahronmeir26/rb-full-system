@@ -37,7 +37,11 @@ export async function GET(request: Request, context: { params: Promise<{ schoolI
   if (!school) return Response.json({ error: "School not found." }, { status: 404 });
 
   const files = await Promise.all((submissions || []).map(async (submission) => {
-    const { data } = await supabase.storage.from(schoolUploadBucket).createSignedUrl(submission.storage_path, 60 * 60);
+    const storage = supabase.storage.from(schoolUploadBucket);
+    const [{ data: previewData }, { data: downloadData }] = await Promise.all([
+      storage.createSignedUrl(submission.storage_path, 60 * 60),
+      storage.createSignedUrl(submission.storage_path, 60 * 60, { download: submission.file_name }),
+    ]);
     return {
       id: submission.id,
       title: submission.title,
@@ -46,7 +50,8 @@ export async function GET(request: Request, context: { params: Promise<{ schoolI
       fileSizeBytes: submission.file_size_bytes,
       status: submission.status,
       submittedAt: submission.submitted_at,
-      downloadUrl: data?.signedUrl || null,
+      previewUrl: previewData?.signedUrl || null,
+      downloadUrl: downloadData?.signedUrl || null,
     };
   }));
   const code = String(school.code || "").trim();

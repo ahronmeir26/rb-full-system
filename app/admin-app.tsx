@@ -808,6 +808,7 @@ type SchoolUploadFile = {
   fileSizeBytes: number | null;
   status: string;
   submittedAt: string;
+  previewUrl: string | null;
   downloadUrl: string | null;
 };
 
@@ -817,14 +818,32 @@ function readableFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function uploadFileDetails(file: SchoolUploadFile) {
+  const extension = file.fileName.split(".").pop()?.toLowerCase() || "";
+  if (file.mimeType === "application/pdf" || extension === "pdf") return { label: "PDF", previewable: true };
+  if (["jpg", "jpeg", "png"].includes(extension) || ["image/jpeg", "image/png"].includes(file.mimeType || "")) {
+    return { label: "Image", previewable: true };
+  }
+  if (["doc", "docx"].includes(extension)) return { label: "Word", previewable: false };
+  if (["xls", "xlsx"].includes(extension)) return { label: "Excel", previewable: false };
+  if (["heic", "heif"].includes(extension)) return { label: "HEIC image", previewable: false };
+  return { label: extension ? extension.toUpperCase() : "File", previewable: false };
+}
+
 function SchoolFormsPanel({ school }: { school: School }) {
   const [uploadLink, setUploadLink] = useState<string | null>(null);
   const [requiresCouponCode, setRequiresCouponCode] = useState(false);
   const [files, setFiles] = useState<SchoolUploadFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [rotating, setRotating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+
+  const updateFiles = useCallback((nextFiles: SchoolUploadFile[]) => {
+    setFiles(nextFiles);
+    setSelectedFileId((current) => nextFiles.some((file) => file.id === current) ? current : nextFiles[0]?.id || null);
+  }, []);
 
   const loadUploads = useCallback(async () => {
     setLoading(true);
@@ -835,8 +854,8 @@ function SchoolFormsPanel({ school }: { school: School }) {
     if (!response.ok) return setError(result?.error || "Unable to load forms.");
     setUploadLink(result.uploadLink || null);
     setRequiresCouponCode(result.requiresCouponCode === true);
-    setFiles(result.files || []);
-  }, [school.id]);
+    updateFiles(result.files || []);
+  }, [school.id, updateFiles]);
 
   useEffect(() => {
     let active = true;
@@ -851,7 +870,7 @@ function SchoolFormsPanel({ school }: { school: School }) {
         }
         setUploadLink(result.uploadLink || null);
         setRequiresCouponCode(result.requiresCouponCode === true);
-        setFiles(result.files || []);
+        updateFiles(result.files || []);
       })
       .catch(() => {
         if (active) {
@@ -860,7 +879,7 @@ function SchoolFormsPanel({ school }: { school: School }) {
         }
       });
     return () => { active = false; };
-  }, [school.id]);
+  }, [school.id, updateFiles]);
 
   async function copyUploadLink() {
     if (!uploadLink) return;
@@ -885,16 +904,65 @@ function SchoolFormsPanel({ school }: { school: School }) {
     setCopied(false);
   }
 
-  const latestFile = files[0];
+  const selectedFile = files.find((file) => file.id === selectedFileId) || files[0] || null;
+  const selectedFileDetails = selectedFile ? uploadFileDetails(selectedFile) : null;
+
   return <section className="sidebar-compact-section compact-documents">
     <div className="compact-section-heading"><div><FileText size={14} /><strong>Forms</strong>{!loading && <span>{files.length}</span>}</div><button type="button" className="compact-icon-button" aria-label="Refresh uploaded forms" title="Refresh" disabled={loading} onClick={() => loadUploads()}><RefreshCw className={loading ? "spin" : ""} size={13} /></button></div>
-    {loading ? <p className="compact-empty">Loading forms…</p> : requiresCouponCode ? <div className="compact-required-row"><span>Coupon code required for the upload link</span></div> : <>
-      <div className="compact-upload-actions">
-        {uploadLink ? <><button type="button" onClick={copyUploadLink}><Copy size={12} /> {copied ? "Copied" : "Copy upload link"}</button><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Open</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={12} /> {rotating ? "Replacing…" : "Replace"}</button></> : <span>Upload link unavailable</span>}
+    {loading ? <div className="forms-loading"><RefreshCw className="spin" size={20} /><p>Loading uploaded forms…</p></div> : <>
+      <div className="forms-upload-link">
+        <div>
+          <strong>School upload link</strong>
+          <span>{requiresCouponCode ? "Assign a coupon code to create a secure upload link." : "Share this link when the school needs to send another form."}</span>
+        </div>
+        <div className="compact-upload-actions">
+          {uploadLink ? <><button type="button" onClick={copyUploadLink}><Copy size={13} /> {copied ? "Copied" : "Copy link"}</button><a href={uploadLink} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open</a><button type="button" disabled={rotating} onClick={rotateUploadLink}><RotateCw size={13} /> {rotating ? "Replacing…" : "Replace"}</button></> : <span>Upload link unavailable</span>}
+        </div>
       </div>
-      {latestFile ? <a className="compact-file-row" href={latestFile.downloadUrl || undefined} target="_blank" rel="noreferrer" aria-disabled={!latestFile.downloadUrl}><div><strong>{latestFile.fileName}</strong><small>{formatDate(latestFile.submittedAt, dateTimeFormatter)} · {readableFileSize(latestFile.fileSizeBytes)}</small></div>{files.length > 1 ? <span>+{files.length - 1} more</span> : latestFile.downloadUrl && <ExternalLink size={12} />}</a> : <p className="compact-empty">No forms uploaded yet</p>}
+      {files.length > 0 ? <div className="forms-viewer">
+        <aside className="forms-file-browser" aria-label="Uploaded forms">
+          <div className="forms-file-browser-heading"><strong>Uploaded forms</strong><span>{files.length}</span></div>
+          <div className="forms-file-list">
+            {files.map((file) => {
+              const details = uploadFileDetails(file);
+              const selected = file.id === selectedFile?.id;
+              return <button type="button" className="forms-file-item" data-selected={selected} aria-pressed={selected} key={file.id} onClick={() => setSelectedFileId(file.id)}>
+                <span className="forms-file-icon"><FileText size={17} /></span>
+                <span className="forms-file-copy">
+                  <strong title={file.fileName}>{file.fileName}</strong>
+                  <small>{formatDate(file.submittedAt, dateTimeFormatter)} · {readableFileSize(file.fileSizeBytes)}</small>
+                </span>
+                <span className="forms-file-type">{details.label}</span>
+              </button>;
+            })}
+          </div>
+        </aside>
+        {selectedFile && selectedFileDetails && <section className="forms-preview-panel" aria-label={`Viewing ${selectedFile.fileName}`}>
+          <div className="forms-preview-toolbar">
+            <div>
+              <span>{selectedFileDetails.label} · {readableFileSize(selectedFile.fileSizeBytes)}</span>
+              <strong title={selectedFile.fileName}>{selectedFile.fileName}</strong>
+              <small>Uploaded {formatDate(selectedFile.submittedAt, dateTimeFormatter)}</small>
+            </div>
+            <div className="forms-preview-actions">
+              {selectedFile.previewUrl && <a href={selectedFile.previewUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Open</a>}
+              {selectedFile.downloadUrl && <a className="form-download-button" href={selectedFile.downloadUrl} download={selectedFile.fileName}><Download size={15} /> Download</a>}
+            </div>
+          </div>
+          <div className="forms-preview-surface">
+            {selectedFileDetails.previewable && selectedFile.previewUrl
+              ? <iframe src={selectedFile.previewUrl} title={`Preview of ${selectedFile.fileName}`} />
+              : <div className="forms-preview-fallback">
+                <span><FileText size={34} /></span>
+                <strong>Preview unavailable for {selectedFileDetails.label} files</strong>
+                <p>Download the form to view it in the appropriate application.</p>
+                {selectedFile.downloadUrl && <a className="form-download-button" href={selectedFile.downloadUrl} download={selectedFile.fileName}><Download size={15} /> Download {selectedFileDetails.label}</a>}
+              </div>}
+          </div>
+        </section>}
+      </div> : <div className="forms-empty-state"><span><FileText size={28} /></span><strong>No forms uploaded yet</strong><p>Uploaded forms will appear here for review and download.</p></div>}
     </>}
-    {error && <p className="contact-error">{error}</p>}
+    {error && <p className="contact-error" role="alert">{error}</p>}
   </section>;
 }
 
@@ -1067,7 +1135,7 @@ function SchoolDetail({ school, statuses, correspondenceVersion, resolvingReplie
         </aside>
       </div>
       {sidebarModal === "forms" && <div className="modal-backdrop" role="presentation" onMouseDown={() => setSidebarModal(null)}>
-        <div id="school-forms-modal" className="modal resource-modal" role="dialog" aria-modal="true" aria-labelledby="school-forms-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div id="school-forms-modal" className="modal resource-modal forms-resource-modal" role="dialog" aria-modal="true" aria-labelledby="school-forms-title" onMouseDown={(event) => event.stopPropagation()}>
           <div className="modal-head"><div><p className="eyebrow">School resources</p><h2 id="school-forms-title">Forms for {school.name}</h2></div><button type="button" className="icon-button" onClick={() => setSidebarModal(null)} aria-label="Close forms"><X size={20} /></button></div>
           <div className="resource-modal-body"><SchoolFormsPanel school={school} /></div>
         </div>
