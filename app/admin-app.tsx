@@ -29,12 +29,13 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DiscountProgram, OutreachStatus, School } from "@/lib/types";
+import type { DiscountProgram, EmailTemplate, OutreachStatus, School } from "@/lib/types";
 import type { Viewer } from "@/lib/auth";
 import { outreachStatusTone } from "@/lib/outreach-status";
 import { currentEmailBody } from "@/lib/email-body";
 import { initial2026SchoolCode } from "@/lib/school-code";
 import { DiscountsSection } from "./discounts-section";
+import { EmailTemplateManager, fetchEmailTemplates } from "./email-template-manager";
 
 const programTimeZone = "America/New_York";
 const otherStatusValue = "__other__";
@@ -88,15 +89,6 @@ function attentionReasonsFor(school: School) {
   if (!school.code) reasons.push("Coupon code missing");
   return reasons;
 }
-
-const emailTemplates = [
-  { name: "Choose a template", subject: "Your school program forms and next steps", message: "Hi {firstName},\n\nPlease review your school's program information and next steps below.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team" },
-  { name: "Initial invitation", subject: "Teacher Appreciation Program — please share with staff", message: "Hi {firstName},\n\nWe are pleased to invite {school} to this year's Teacher Appreciation Program. Please share the program with your teachers and staff.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
-  { name: "Reminder", subject: "Reminder: Teacher Appreciation Program", message: "Hi {firstName},\n\nA quick reminder to share the Teacher Appreciation Program with your staff before the ordering window closes.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
-  { name: "Final call", subject: "Final call: Teacher Appreciation Program", message: "Hi {firstName},\n\nThis is a final reminder to share the Teacher Appreciation Program with your staff.\n\nYour school code: {code}\nOrder here: {orderLink}\n\nBest,\nA.I. Stone" },
-  { name: "Ordering help", subject: "Help with your Teacher Appreciation order", message: "Hi {firstName},\n\nWe are happy to help with your order. Please use your school code {code} at the program ordering link below.\n\n{orderLink}\n\nBest,\nA.I. Stone" },
-  { name: "Shipping update", subject: "Teacher Appreciation order update", message: "Hi {firstName},\n\nWe are working on the current Teacher Appreciation orders and will share shipping updates as soon as they are available.\n\nBest,\nA.I. Stone" },
-];
 
 function fillTemplate(value: string, school: School, contactName: string) {
   return value
@@ -332,26 +324,47 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
   const contactName = school.admin || "school administrator";
   const [contacts, setContacts] = useState<Array<{ id: string; name: string | null; email: string; title: string }>>([]);
   const [recipientEmail, setRecipientEmail] = useState(school.email);
-  const [templateName, setTemplateName] = useState(emailTemplates[0].name);
-  const [subject, setSubject] = useState("Your school program forms and next steps");
-  const [message, setMessage] = useState(`Hi ${contactName.split(" ")[0]},\n\nPlease review your school's program information and next steps below.\n\nLet us know if you have any questions.\n\nBest,\nProgram Team`);
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(true);
+  const [templateError, setTemplateError] = useState("");
+  const [stage, setStage] = useState<"choose" | "compose" | "manage">("choose");
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const loadTemplates = useCallback(async () => {
+    setTemplateLoading(true);
+    setTemplateError("");
+    try {
+      setTemplates(await fetchEmailTemplates());
+    } catch (cause) {
+      setTemplateError(cause instanceof Error ? cause.message : "Unable to load email templates.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch(`/api/schools/${school.id}/contacts`)
       .then((response) => response.json())
       .then((result) => setContacts(Array.isArray(result?.contacts) ? result.contacts : []))
       .catch(() => undefined);
+    fetchEmailTemplates()
+      .then(setTemplates)
+      .catch((cause) => setTemplateError(cause instanceof Error ? cause.message : "Unable to load email templates."))
+      .finally(() => setTemplateLoading(false));
   }, [school.id]);
 
-  function applyTemplate(name: string) {
-    const template = emailTemplates.find((item) => item.name === name) || emailTemplates[0];
+  function composeFrom(template: EmailTemplate | null) {
     const selectedContact = contacts.find((contact) => contact.email === recipientEmail);
     const nameForTemplate = selectedContact?.name || contactName;
-    setTemplateName(name);
-    setSubject(fillTemplate(template.subject, school, nameForTemplate));
-    setMessage(fillTemplate(template.message, school, nameForTemplate));
+    setSelectedTemplate(template);
+    setSubject(template ? fillTemplate(template.subject, school, nameForTemplate) : "");
+    setMessage(template ? fillTemplate(template.body, school, nameForTemplate) : "");
+    setError("");
+    setStage("compose");
   }
 
   async function send() {
@@ -374,21 +387,360 @@ function EmailModal({ school, onClose, onSent }: { school: School; onClose: () =
     }
     onSent();
   }
+
+  if (stage === "manage") {
+    return <EmailTemplateManager
+      initialTemplates={templates}
+      onTemplatesChanged={setTemplates}
+      onClose={() => setStage("choose")}
+    />;
+  }
+
+  if (stage === "choose") {
+    return (
+      <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+        <div className="modal template-chooser-modal" role="dialog" aria-modal="true" aria-labelledby="template-chooser-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-head">
+            <div><p className="eyebrow">New message</p><h2 id="template-chooser-title">Choose an email template</h2></div>
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button>
+          </div>
+          <div className="template-chooser-heading">
+            <p>Start with a saved message for {school.name}, or write one from scratch.</p>
+            <button type="button" className="secondary-button template-manage-button" onClick={() => setStage("manage")}><Settings size={14} /> Manage templates</button>
+          </div>
+          <div className="template-choice-grid">
+            <button type="button" className="template-choice-card blank" onClick={() => composeFrom(null)}>
+              <span className="template-choice-icon"><Plus size={19} /></span>
+              <span><strong>Start from scratch</strong><small>Open a blank email</small></span>
+              <ChevronRight size={16} />
+            </button>
+            {templates.map((template) => <button type="button" className="template-choice-card" key={template.id} onClick={() => composeFrom(template)}>
+              <span className="template-choice-icon"><FileText size={18} /></span>
+              <span><strong>{template.name}</strong><small>{template.subject}</small><em>{template.body.replace(/\s+/g, " ").trim()}</em></span>
+              <ChevronRight size={16} />
+            </button>)}
+          </div>
+          {templateLoading && <div className="template-loading"><RefreshCw className="spin" size={15} /> Loading templates…</div>}
+          {templateError && <div className="template-load-error" role="alert"><span>{templateError}</span><button type="button" onClick={() => void loadTemplates()}>Try again</button></div>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Compose email" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="modal email-compose-modal" role="dialog" aria-modal="true" aria-label="Compose email" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-head">
-          <div><p className="eyebrow">New message</p><h2>Email {school.admin || school.name}</h2></div>
+          <div><button type="button" className="modal-back-button" onClick={() => setStage("choose")}><ArrowLeft size={14} /> Templates</button><h2>Email {school.admin || school.name}</h2></div>
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button>
         </div>
+        <div className="selected-template-line"><span>Template</span><strong>{selectedTemplate?.name || "Blank email"}</strong><button type="button" onClick={() => setStage("choose")}>Change</button></div>
         <label className="compose-field"><span>To</span><select value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)}><option value={school.email || ""}>{school.email || "No email address recorded"}</option>{contacts.filter((contact) => contact.email !== school.email).map((contact) => <option key={contact.id} value={contact.email}>{contact.name ? `${contact.name} — ${contact.email}` : contact.email}</option>)}</select></label>
-        <label className="compose-field"><span>Template</span><select value={templateName} onChange={(event) => applyTemplate(event.target.value)}>{emailTemplates.map((template) => <option key={template.name}>{template.name}</option>)}</select></label>
         <label className="compose-field"><span>Subject</span><input value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
         <label className="compose-field message-field"><span>Message</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} /></label>
         {error && <div className="login-error" role="alert">{error}</div>}
         <div className="modal-actions">
-          <button className="secondary-button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" onClick={send} disabled={!recipientEmail || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Sending…" : "Send email"}</button>
+          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary-button" onClick={send} disabled={!recipientEmail || loading || !subject.trim() || !message.trim()}><Send size={16} /> {loading ? "Sending…" : "Send email"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function hasValidEmail(school: School) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(school.email.trim());
+}
+
+function MassEmailModal({ schools, statuses, onClose, onSent }: {
+  schools: School[];
+  statuses: OutreachStatus[];
+  onClose: () => void;
+  onSent: (queued: number) => void;
+}) {
+  const statusOptions = useMemo(() => {
+    const names = new Set(statuses.map((status) => status.name));
+    schools.forEach((school) => names.add(school.outreachStatus));
+    return [...names].filter(Boolean);
+  }, [schools, statuses]);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set());
+  const [selectedSchoolIds, setSelectedSchoolIds] = useState<Set<number>>(() => new Set());
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(true);
+  const [templateError, setTemplateError] = useState("");
+  const [stage, setStage] = useState<"choose" | "compose" | "manage">("choose");
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [reviewed, setReviewed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const matchedSchools = useMemo(
+    () => schools
+      .filter((school) => selectedStatuses.has(school.outreachStatus))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [schools, selectedStatuses],
+  );
+  const selectedSchools = useMemo(
+    () => matchedSchools.filter((school) => selectedSchoolIds.has(school.id) && hasValidEmail(school)),
+    [matchedSchools, selectedSchoolIds],
+  );
+  const missingEmailCount = matchedSchools.filter((school) => !hasValidEmail(school)).length;
+  const visibleRecipients = useMemo(() => {
+    const query = recipientSearch.trim().toLowerCase();
+    if (!query) return matchedSchools;
+    return matchedSchools.filter((school) =>
+      `${school.name} ${school.admin} ${school.email} ${school.outreachStatus}`.toLowerCase().includes(query),
+    );
+  }, [matchedSchools, recipientSearch]);
+
+  const loadTemplates = useCallback(async () => {
+    setTemplateLoading(true);
+    setTemplateError("");
+    try {
+      setTemplates(await fetchEmailTemplates());
+    } catch (cause) {
+      setTemplateError(cause instanceof Error ? cause.message : "Unable to load email templates.");
+    } finally {
+      setTemplateLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchEmailTemplates()
+      .then((items) => {
+        if (active) setTemplates(items);
+      })
+      .catch((cause) => {
+        if (active) setTemplateError(cause instanceof Error ? cause.message : "Unable to load email templates.");
+      })
+      .finally(() => {
+        if (active) setTemplateLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !loading) onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [loading, onClose]);
+
+  function toggleStatus(statusName: string) {
+    setReviewed(false);
+    const selecting = !selectedStatuses.has(statusName);
+    setSelectedStatuses((current) => {
+      const next = new Set(current);
+      if (selecting) next.add(statusName);
+      else next.delete(statusName);
+      return next;
+    });
+    setSelectedSchoolIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      schools
+        .filter((school) => school.outreachStatus === statusName)
+        .forEach((school) => {
+          if (selecting && hasValidEmail(school)) nextIds.add(school.id);
+          else nextIds.delete(school.id);
+        });
+      return nextIds;
+    });
+  }
+
+  function selectAllStatuses() {
+    setReviewed(false);
+    setSelectedStatuses(new Set(statusOptions));
+    setSelectedSchoolIds(new Set(schools.filter(hasValidEmail).map((school) => school.id)));
+  }
+
+  function clearStatuses() {
+    setReviewed(false);
+    setSelectedStatuses(new Set());
+    setSelectedSchoolIds(new Set());
+  }
+
+  function toggleSchool(schoolId: number) {
+    setReviewed(false);
+    setSelectedSchoolIds((current) => {
+      const next = new Set(current);
+      if (next.has(schoolId)) next.delete(schoolId);
+      else next.add(schoolId);
+      return next;
+    });
+  }
+
+  function composeFrom(template: EmailTemplate | null) {
+    setSelectedTemplate(template);
+    setSubject(template?.subject ?? "");
+    setMessage(template?.body ?? "");
+    setError("");
+    setStage("compose");
+  }
+
+  async function send() {
+    setLoading(true);
+    setError("");
+    const response = await fetch("/api/correspondence", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        schoolIds: selectedSchools.map((school) => school.id),
+        subject,
+        message,
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    setLoading(false);
+    if (!response.ok) {
+      setError(result?.error || "Unable to send the emails.");
+      return;
+    }
+    if (result?.failed) {
+      setError(`${result.queued} email${result.queued === 1 ? "" : "s"} queued, but ${result.failed} failed. The failed schools remain selected.`);
+      return;
+    }
+    onSent(result?.queued || selectedSchools.length);
+  }
+
+  if (stage === "manage") {
+    return <EmailTemplateManager
+      initialTemplates={templates}
+      onTemplatesChanged={setTemplates}
+      onClose={() => setStage("choose")}
+    />;
+  }
+
+  if (stage === "choose") {
+    return (
+      <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+        <div className="modal template-chooser-modal" role="dialog" aria-modal="true" aria-labelledby="mass-template-chooser-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-head">
+            <div><p className="eyebrow">Mass email</p><h2 id="mass-template-chooser-title">Choose an email template</h2></div>
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button>
+          </div>
+          <div className="template-chooser-heading">
+            <p>Choose the message first, then select and review the school groups that should receive it.</p>
+            <button type="button" className="secondary-button template-manage-button" onClick={() => setStage("manage")}><Settings size={14} /> Manage templates</button>
+          </div>
+          <div className="template-choice-grid">
+            <button type="button" className="template-choice-card blank" onClick={() => composeFrom(null)}>
+              <span className="template-choice-icon"><Plus size={19} /></span>
+              <span><strong>Start from scratch</strong><small>Open a blank mass email</small></span>
+              <ChevronRight size={16} />
+            </button>
+            {templates.map((template) => <button type="button" className="template-choice-card" key={template.id} onClick={() => composeFrom(template)}>
+              <span className="template-choice-icon"><FileText size={18} /></span>
+              <span><strong>{template.name}</strong><small>{template.subject}</small><em>{template.body.replace(/\s+/g, " ").trim()}</em></span>
+              <ChevronRight size={16} />
+            </button>)}
+          </div>
+          {templateLoading && <div className="template-loading"><RefreshCw className="spin" size={15} /> Loading templates…</div>}
+          {templateError && <div className="template-load-error" role="alert"><span>{templateError}</span><button type="button" onClick={() => void loadTemplates()}>Try again</button></div>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-backdrop mass-email-backdrop" role="presentation" onMouseDown={() => !loading && onClose()}>
+      <div className="modal mass-email-modal" role="dialog" aria-modal="true" aria-labelledby="mass-email-title" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="mass-email-header">
+          <div>
+            <p className="eyebrow">School outreach</p>
+            <h2 id="mass-email-title">Send a mass email</h2>
+            <p>Choose status groups, review every recipient, and send one personalized message.</p>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} disabled={loading} aria-label="Close"><X size={20} /></button>
+        </div>
+
+        <div className="mass-email-summary" aria-live="polite">
+          <div><strong>{selectedStatuses.size}</strong><span>Status groups</span></div>
+          <div><strong>{matchedSchools.length}</strong><span>Schools matched</span></div>
+          <div className="summary-ready"><strong>{selectedSchools.length}</strong><span>Emails ready</span></div>
+          <div className={missingEmailCount ? "summary-warning" : ""}><strong>{missingEmailCount}</strong><span>Missing email</span></div>
+        </div>
+
+        <div className="mass-email-workspace">
+          <section className="mass-status-panel" aria-labelledby="mass-status-heading">
+            <div className="mass-panel-heading">
+              <div><span className="mass-step">1</span><div><h3 id="mass-status-heading">Choose statuses</h3><p>Select one or more groups.</p></div></div>
+              <button type="button" onClick={selectedStatuses.size === statusOptions.length ? clearStatuses : selectAllStatuses}>
+                {selectedStatuses.size === statusOptions.length ? "Clear all" : "Select all"}
+              </button>
+            </div>
+            <div className="mass-status-list">
+              {statusOptions.map((statusName) => {
+                const statusSchools = schools.filter((school) => school.outreachStatus === statusName);
+                const readyCount = statusSchools.filter(hasValidEmail).length;
+                const selectedCount = statusSchools.filter((school) => selectedSchoolIds.has(school.id)).length;
+                return (
+                  <label className="mass-status-option" data-selected={selectedStatuses.has(statusName)} key={statusName}>
+                    <input type="checkbox" checked={selectedStatuses.has(statusName)} onChange={() => toggleStatus(statusName)} />
+                    <span className="mass-status-copy"><strong>{statusName}</strong><small>{readyCount} with email{readyCount !== statusSchools.length ? ` · ${statusSchools.length - readyCount} missing` : ""}</small></span>
+                    <span className="mass-status-count">{selectedStatuses.has(statusName) ? `${selectedCount}/${readyCount}` : readyCount}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="mass-compose-panel" aria-labelledby="mass-compose-heading">
+            <div className="mass-panel-heading">
+              <div><span className="mass-step">2</span><div><h3 id="mass-compose-heading">Write the email</h3><p>Each school gets its own copy.</p></div></div>
+              <button type="button" onClick={() => setStage("choose")}>Change template</button>
+            </div>
+            <div className="mass-compose-fields">
+              <div className="mass-selected-template"><span>Template</span><strong>{selectedTemplate?.name || "Blank email"}</strong></div>
+              <label><span>Subject</span><input value={subject} maxLength={250} onChange={(event) => setSubject(event.target.value)} /></label>
+              <label className="mass-message-field"><span>Message</span><textarea value={message} maxLength={20_000} onChange={(event) => setMessage(event.target.value)} /></label>
+            </div>
+            <div className="personalization-note">
+              <CheckCircle2 size={15} />
+              <div><strong>Personalized automatically</strong><span><code>{"{firstName}"}</code> <code>{"{school}"}</code> <code>{"{code}"}</code> and <code>{"{orderLink}"}</code> are filled for each school.</span></div>
+            </div>
+          </section>
+
+          <section className="mass-recipient-panel" aria-labelledby="mass-recipient-heading">
+            <div className="mass-panel-heading">
+              <div><span className="mass-step">3</span><div><h3 id="mass-recipient-heading">Review recipients</h3><p>{selectedSchools.length} selected to receive this email.</p></div></div>
+            </div>
+            <label className="recipient-search"><Search size={15} /><input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Find a school or contact" aria-label="Search recipients" /></label>
+            <div className="mass-recipient-list">
+              {!selectedStatuses.size && <div className="recipient-empty"><Mail size={24} /><strong>No status selected</strong><span>Choose a status group to see its schools here.</span></div>}
+              {selectedStatuses.size > 0 && visibleRecipients.length === 0 && <div className="recipient-empty"><Search size={22} /><strong>No schools found</strong><span>Try a different recipient search.</span></div>}
+              {visibleRecipients.map((school) => {
+                const validEmail = hasValidEmail(school);
+                const checked = validEmail && selectedSchoolIds.has(school.id);
+                return (
+                  <label className="mass-recipient-row" data-excluded={!validEmail || !checked} key={school.id}>
+                    <input type="checkbox" checked={checked} disabled={!validEmail} onChange={() => toggleSchool(school.id)} />
+                    <Avatar school={school} small />
+                    <span className="mass-recipient-copy"><strong>{school.name}</strong><small>{validEmail ? `${school.admin ? `${school.admin} · ` : ""}${school.email}` : "Excluded · no email address"}</small></span>
+                    <OutreachPill status={school.outreachStatus} />
+                  </label>
+                );
+              })}
+            </div>
+            {matchedSchools.length > 0 && <label className="recipient-review-check"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} /><span><strong>I reviewed this recipient list</strong><small>Only the {selectedSchools.length} checked schools will receive the email.</small></span></label>}
+          </section>
+        </div>
+
+        {error && <div className="login-error mass-email-error" role="alert">{error}</div>}
+        <div className="mass-email-footer">
+          <div className="mass-send-total"><Mail size={17} /><span><strong>{selectedSchools.length} individual emails</strong><small>Recipients cannot see one another.</small></span></div>
+          <div className="modal-actions">
+            <button type="button" className="secondary-button" onClick={onClose} disabled={loading}>Cancel</button>
+            <button type="button" className="primary-button" onClick={send} disabled={!reviewed || !selectedSchools.length || loading || !subject.trim() || !message.trim()}>
+              <Send size={16} /> {loading ? `Queuing ${selectedSchools.length}…` : `Send to ${selectedSchools.length} schools`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -839,10 +1191,11 @@ function Correspondence({ school, refreshVersion, onEmail, onNoteSaved, onReplyP
   </section>;
 }
 
-function SettingsModal({ email, onClose, onCorrespondenceChanged }: {
+function SettingsModal({ email, onClose, onCorrespondenceChanged, onManageEmailTemplates }: {
   email: string;
   onClose: () => void;
   onCorrespondenceChanged: () => void;
+  onManageEmailTemplates: () => void;
 }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -860,7 +1213,16 @@ function SettingsModal({ email, onClose, onCorrespondenceChanged }: {
   }
 
   useEffect(() => {
-    loadGmailStatus().catch(() => undefined);
+    let active = true;
+    fetch("/api/gmail/status")
+      .then(async (response) => ({ response, result: await response.json().catch(() => null) }))
+      .then(({ response, result }) => {
+        if (active && response.ok) setGmailStatus(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function syncGmail() {
@@ -924,6 +1286,13 @@ function SettingsModal({ email, onClose, onCorrespondenceChanged }: {
     <div className="modal settings-modal" role="dialog" aria-modal="true" aria-label="Account settings" onMouseDown={(event) => event.stopPropagation()}>
       <div className="modal-head"><div><p className="eyebrow">Account settings</p><h2>Settings</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
       <div className="settings-email"><span>Signed in as</span><strong>{email}</strong></div>
+      <section className="email-template-settings" aria-labelledby="email-template-settings-title">
+        <div className="settings-section-heading">
+          <div><h3 id="email-template-settings-title">Email templates</h3><p>Create and edit the messages available whenever you send email.</p></div>
+          <button type="button" className="secondary-button" onClick={onManageEmailTemplates}><FileText size={14} /> Manage</button>
+        </div>
+      </section>
+      <div className="settings-divider" />
       <section className="gmail-settings" aria-labelledby="gmail-settings-title">
         <div className="settings-section-heading">
           <div><h3 id="gmail-settings-title">Gmail sync</h3><p>Pull school conversations into the matching school timeline every 10 minutes.</p></div>
@@ -966,9 +1335,11 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
   const [editSchool, setEditSchool] = useState<School | null>(null);
   const [couponCodeSchool, setCouponCodeSchool] = useState<School | null>(null);
   const [emailSchool, setEmailSchool] = useState<School | null>(null);
+  const [massEmailOpen, setMassEmailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [section, setSection] = useState<"overview" | "discounts">("overview");
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState("");
   const [correspondenceVersion, setCorrespondenceVersion] = useState(0);
   const [gmailNotice, setGmailNotice] = useState("");
   const [search, setSearch] = useState("");
@@ -1021,15 +1392,17 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
     const url = new URL(window.location.href);
     const result = url.searchParams.get("gmail");
     if (!result) return;
-    setGmailNotice(result === "connected"
+    const notice = result === "connected"
       ? "Gmail connected. Your first school email sync is starting now."
       : result === "setup-required"
         ? "Gmail needs one-time setup before it can be connected."
         : result === "cancelled"
           ? "Gmail connection was cancelled."
-          : "Gmail could not be connected. Please try again.");
+          : "Gmail could not be connected. Please try again.";
+    const timer = window.setTimeout(() => setGmailNotice(notice), 0);
     url.searchParams.delete("gmail");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -1178,6 +1551,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       <header className="topbar">
         <Logo />
         <div className="topbar-actions">
+          <button className="topbar-control mass-email-trigger" onClick={() => setMassEmailOpen(true)}><Mail size={16} /><span>Mass email</span></button>
           <button className={`topbar-control ${section === "discounts" ? "active" : ""}`} onClick={toggleDiscounts}><BadgePercent size={16} /><span>{section === "discounts" ? "Overview" : "Discounts"}</span></button>
           <button className="topbar-control" onClick={() => setSettingsOpen(true)}><Settings size={16} /><span>Settings</span></button>
           <div className="topbar-account">
@@ -1199,7 +1573,7 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
           </section>
         </div>
 
-        {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email sent</strong><span>Your correspondence timeline has been updated.</span></div><button onClick={() => setSent(false)} aria-label="Dismiss"><X size={16} /></button></div>}
+        {sent && <div className="success-banner dismissible"><CheckCircle2 size={18} /><div><strong>Email queued</strong><span>{sent}</span></div><button onClick={() => setSent("")} aria-label="Dismiss"><X size={16} /></button></div>}
         {gmailNotice && <div className="success-banner dismissible"><Mail size={18} /><div><strong>Gmail</strong><span>{gmailNotice}</span></div><button onClick={() => setGmailNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
 
         <section ref={schoolsSectionRef} className="schools-section">
@@ -1210,8 +1584,10 @@ export function AdminApp({ initialSchools, initialOutreachStatuses, initialDisco
       </main>}
     </div>
     {createSchoolOpen && <CreateSchoolModal statuses={outreachStatuses} onClose={() => setCreateSchoolOpen(false)} onCreated={schoolCreated} />}
-    {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent(true); setCorrespondenceVersion((version) => version + 1); }} />}
-    {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
+    {emailSchool && <EmailModal school={emailSchool} onClose={() => setEmailSchool(null)} onSent={() => { const updated = { ...emailSchool, replyPending: false }; setSchools((current) => current.map((school) => school.id === updated.id ? updated : school)); setSelected((current) => current?.id === updated.id ? updated : current); setEmailSchool(null); setSent("1 email was queued and the school timeline was updated."); setCorrespondenceVersion((version) => version + 1); }} />}
+    {massEmailOpen && <MassEmailModal schools={schools} statuses={outreachStatuses} onClose={() => setMassEmailOpen(false)} onSent={(queued) => { setMassEmailOpen(false); setSent(`${queued.toLocaleString()} personalized email${queued === 1 ? " was" : "s were"} queued successfully.`); setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
+    {settingsOpen && <SettingsModal email={viewer.email} onClose={() => setSettingsOpen(false)} onManageEmailTemplates={() => { setSettingsOpen(false); setTemplateManagerOpen(true); }} onCorrespondenceChanged={() => { setCorrespondenceVersion((version) => version + 1); void refreshSchools(); }} />}
+    {templateManagerOpen && <EmailTemplateManager onClose={() => setTemplateManagerOpen(false)} />}
     {editSchool && <EditSchoolModal school={editSchool} statuses={outreachStatuses} onClose={() => setEditSchool(null)} onSaved={(updates) => saveSchool(editSchool, updates)} />}
     {couponCodeSchool && <CouponCodeModal school={couponCodeSchool} onClose={() => setCouponCodeSchool(null)} onSaved={(updates) => { saveSchool(couponCodeSchool, updates); setCouponCodeSchool(null); }} />}
   </div>;

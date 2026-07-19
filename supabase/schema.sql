@@ -312,6 +312,67 @@ create table if not exists public.form_submissions (
 create index if not exists form_submissions_school_status_idx
   on public.form_submissions (school_id, status);
 
+create table if not exists public.email_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  subject text not null,
+  body text not null,
+  sort_order integer not null default 0,
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (char_length(name) between 1 and 80),
+  check (char_length(subject) between 1 and 250),
+  check (char_length(body) between 1 and 20000)
+);
+
+create unique index if not exists email_templates_name_idx
+  on public.email_templates (lower(name));
+create index if not exists email_templates_sort_idx
+  on public.email_templates (sort_order, name);
+
+-- Starter copy distilled from the recurring 2025 Programs mailbox campaigns
+-- and replies; school-specific details are represented by placeholders.
+insert into public.email_templates (id, name, subject, body, sort_order)
+values
+  (
+    '4ef826d4-9245-4f50-81ee-0b20634d4fe1',
+    'School invitation',
+    'A.I. Stone Teacher Appreciation Program — please forward to all staff',
+    E'Good afternoon {firstName},\n\nA.I. Stone is delighted to invite {school} to participate in our Teacher Appreciation Program for this Pesach season. We are deeply grateful for the daily dedication of your Rebbeim, teachers, and support staff, who play an essential role in shaping future generations. In recognition of their commitment, we are honored to extend exclusive offers on our high-quality, non-iron twill shirts.\n\nExclusive offer details:\n\n- Men''s shirts: $25 per shirt (reg. $45)\n- Boys'' shirts: $20 per shirt (reg. $39)\n- Shipping: $10 flat rate, regardless of order size\n\nOrders can be placed at:\n{orderLink}\n\nYour school''s unique coupon code: {code}\n\nFor those without internet access, orders may alternatively be placed by emailing the order form to forms@aistone.com or calling 732-746-5035.\n\nPlease be advised that due to limited factory capacity, the program may conclude early. We encourage prompt ordering to secure your participation.\n\nWe hope this offer serves as a small token of our appreciation for all that you do.\n\nWarm regards,\nA.I. Stone',
+    10
+  ),
+  (
+    'a23676b1-2f6b-45ce-a5e5-f6bb7b1abf02',
+    'Three-day reminder',
+    '3 days left to order — A.I. Stone Teacher Appreciation Program',
+    E'Dear Teachers and Staff,\n\nJust a quick reminder that our Teacher Appreciation shirt offer ends in three days.\n\nIf you haven''t placed your order yet, now is the time. Once the deadline passes, we won''t be able to honor the special pricing.\n\nOur factory is ready to produce a large quantity of shirts; however, capacity is limited. If we reach our limit, we will no longer be able to accept additional orders, even before the deadline.\n\nOrder now:\n{orderLink}\n\nYour school code: {code}\n\nThank you for the incredible work you do every day. We look forward to serving you once again through this program!\n\nWarm regards,\nA.I. Stone',
+    20
+  ),
+  (
+    '3db55f08-0db9-4d91-b70f-dd9568da8081',
+    'Final courtesy extension',
+    'Final call — A.I. Stone Teacher Appreciation Program extended',
+    E'Good afternoon {firstName},\n\nDue to an unexpected influx of last-minute requests, we are pleased to offer a courtesy extension for the A.I. Stone Teacher Appreciation Program.\n\nStaff members who would still like to participate may place orders at the exclusive discounted pricing using the link below:\n\n{orderLink}\n\nYour school code: {code}\n\nOrders may also be submitted by email at forms@aistone.com or placed by phone at 732-746-5035.\n\nWe hope this extension provides the additional time needed for anyone who has not yet had the chance to order.\n\nWarm regards,\nA.I. Stone',
+    30
+  ),
+  (
+    'fe4ba07d-44e7-40f3-a22e-da35e48728d2',
+    'Past participant extension',
+    'Courtesy extension — Teacher Appreciation Program still open',
+    E'Good afternoon {firstName},\n\nWe hope you are doing well. We noticed that {school} participated in our Teacher Appreciation Program in previous years but has not yet placed an order this season.\n\nWe received messages from teachers who never received the program forms and therefore did not have the opportunity to participate. To ensure that no teacher is left out, we are pleased to offer a courtesy extension.\n\nYou may still take advantage of the exclusive discounted pricing on our premium non-iron shirts—both Men''s and Boys''. The extension applies to all Rebbeim, teachers, and support staff, as well as their families.\n\nTo place an order, please visit:\n{orderLink}\n\nYour discount code: {code}\n\nOrders may also be submitted by email at forms@aistone.com or placed by phone at 732-746-5035.\n\nWe hope this extension provides the additional time needed for anyone who has not yet had the chance to order.\n\nWarm regards,\nA.I. Stone',
+    40
+  ),
+  (
+    '2db099e2-f0b0-4daf-8c55-99b8359915d9',
+    'Program closed',
+    'Teacher Appreciation Program ordering has closed',
+    E'Hi {firstName},\n\nThank you so much for reaching out.\n\nWe truly wish we could still accept your order or make changes to it, but the program has already closed and all orders were submitted to our factory. At this point, the factory has begun processing everything and is unable to add or modify any orders.\n\nWe really appreciate your understanding, and we''ll be sure to notify you when next year''s program opens.\n\nAll the best,\nThe A.I. Stone Team',
+    50
+  )
+on conflict (id) do nothing;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'school-form-uploads',
@@ -657,7 +718,7 @@ begin
   foreach table_name in array array[
     'schools', 'user_profiles', 'school_contacts', 'school_programs',
     'school_year_stats', 'school_outreach_statuses',
-    'school_outreach_status_history', 'form_templates', 'form_submissions',
+    'school_outreach_status_history', 'form_templates', 'form_submissions', 'email_templates',
     'correspondence', 'gmail_connections', 'invitation_campaigns', 'invitation_recipients',
     'discount_programs', 'discount_school_codes', 'order_submissions'
   ]
@@ -681,6 +742,7 @@ comment on table public.discount_programs is 'Shared Shopify discount configurat
 comment on table public.discount_school_codes is 'Per-school redeem-code synchronization state for a yearly Shopify discount.';
 comment on table public.order_submissions is 'Submitted order sheets and the future Shopify processing queue.';
 comment on table public.form_submissions is 'Files submitted through each school''s signed private upload link.';
+comment on table public.email_templates is 'Reusable email subjects and bodies available in the correspondence composer.';
 comment on table public.correspondence is 'Complete per-school email, phone, and internal-note history.';
 comment on view public.schools_overview is 'Schools plus the derived reply_pending flag: any unresolved inbound email without a later non-failed outbound email.';
 comment on table public.gmail_connections is 'Encrypted read-only Gmail connections and incremental synchronization state.';

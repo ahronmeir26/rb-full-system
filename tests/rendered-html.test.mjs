@@ -58,6 +58,7 @@ test("database schema covers the complete school-program workflow", async () => 
     "school_outreach_status_history",
     "form_templates",
     "form_submissions",
+    "email_templates",
     "correspondence",
     "invitation_campaigns",
     "invitation_recipients",
@@ -296,11 +297,43 @@ test("prefills an unsaved 2026 school code from a 2025 code ending in 25", () =>
   assert.equal(initial2026SchoolCode({ code: "CUSTOM26", code2025: "YESHIVA25" }), "CUSTOM26");
 });
 
-test("overview omits the bulk and shortcut email buttons", async () => {
+test("mass email targets visible status groups and reviews school recipients", async () => {
   const editor = await readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(editor, /Email one school/);
-  assert.doesNotMatch(editor, /Email every school/);
-  assert.doesNotMatch(editor, /BulkEmailModal/);
+  const correspondenceRoute = await readFile(new URL("../app/api/correspondence/route.ts", import.meta.url), "utf8");
+  assert.match(editor, /function MassEmailModal/);
+  assert.match(editor, /Choose statuses/);
+  assert.match(editor, /Review recipients/);
+  assert.match(editor, /I reviewed this recipient list/);
+  assert.match(editor, /schoolIds: selectedSchools\.map/);
+  assert.match(correspondenceRoute, /fillSchoolTemplate/);
+  assert.match(correspondenceRoute, /\.replaceAll\("\{school\}"/);
+});
+
+test("email sends start with an editable template library", async () => {
+  const [schema, editor, manager, collectionRoute, itemRoute] = await Promise.all([
+    readFile(new URL("../supabase/schema.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/email-template-manager.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/email-templates/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/email-templates/[templateId]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(schema, /create table if not exists public\.email_templates/);
+  assert.match(schema, /School invitation/);
+  assert.match(schema, /Three-day reminder/);
+  assert.match(schema, /Final courtesy extension/);
+  assert.match(schema, /Past participant extension/);
+  assert.match(schema, /Program closed/);
+  assert.match(editor, /Choose an email template/);
+  assert.match(editor, /Start from scratch/);
+  assert.match(editor, /function EmailModal/);
+  assert.match(editor, /function MassEmailModal/);
+  assert.match(manager, /Manage templates/);
+  assert.match(manager, /New template/);
+  assert.match(manager, /Save changes/);
+  assert.match(collectionRoute, /\.from\("email_templates"\)/);
+  assert.match(itemRoute, /export async function PATCH/);
+  assert.match(itemRoute, /export async function DELETE/);
 });
 
 test("overview keeps compact program stats in the welcome heading without the contact banner", async () => {

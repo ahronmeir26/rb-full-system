@@ -4,6 +4,14 @@ export type OutreachStatus = {
   isSystem: boolean;
 };
 
+export type EmailTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  sortOrder: number;
+};
+
 export type DiscountValueType = "percentage" | "fixed_amount";
 export type DiscountSyncStatus = "draft" | "pending" | "synced" | "error";
 

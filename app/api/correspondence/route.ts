@@ -14,6 +14,24 @@ function serviceClient() {
   return createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+function fillSchoolTemplate(value: string, school: {
+  name: string;
+  admin: string | null;
+  code: string | null;
+}) {
+  const firstName = (school.admin?.trim() || "there").split(/\s+/)[0];
+  const schoolCode = school.code?.trim() || "";
+  const code = schoolCode || "your school code";
+  const orderLink = schoolCode
+    ? `https://aistone.com/rb?discount=${encodeURIComponent(schoolCode)}`
+    : "https://aistone.com/rb";
+  return value
+    .replaceAll("{firstName}", firstName)
+    .replaceAll("{school}", school.name)
+    .replaceAll("{code}", code)
+    .replaceAll("{orderLink}", orderLink);
+}
+
 export async function GET(request: Request) {
   const viewer = await getViewer();
   if (!viewer) return Response.json({ error: "Authentication required." }, { status: 401 });
@@ -152,7 +170,7 @@ export async function POST(request: Request) {
 
   const { data: schools, error: schoolError } = await supabase
     .from("schools")
-    .select("id,name,email")
+    .select("id,name,email,admin,code")
     .in("id", schoolIds);
   if (schoolError) {
     console.error("Unable to load correspondence recipients", schoolError);
@@ -167,14 +185,16 @@ export async function POST(request: Request) {
     .filter((school) => school.recipientEmail?.includes("@"))
     .map((school) => {
       const eventId = crypto.randomUUID();
+      const personalizedSubject = fillSchoolTemplate(subject, school);
+      const personalizedMessage = fillSchoolTemplate(message, school);
       return {
         correspondence: {
           id: crypto.randomUUID(),
           school_id: school.id,
           direction: "outbound",
           channel: "email",
-          subject,
-          body: message,
+          subject: personalizedSubject,
+          body: personalizedMessage,
           from_email: viewer.email,
           to_email: school.recipientEmail,
           status: "queued",
@@ -186,8 +206,8 @@ export async function POST(request: Request) {
         klaviyo: {
           eventId,
           toEmail: school.recipientEmail,
-          subject,
-          message,
+          subject: personalizedSubject,
+          message: personalizedMessage,
           senderEmail: viewer.email,
           senderName: viewer.displayName,
           schoolId: Number(school.id),
