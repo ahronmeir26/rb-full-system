@@ -517,6 +517,11 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .personalization-note strong { font-size: 9px; }
 .personalization-note span { color: #667a88; line-height: 1.6; font-size: 8px; }
 .personalization-note code { padding: 2px 4px; border-radius: 4px; color: #3c586b; background: #dceaf4; font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.mass-status-after-send { margin-top: 10px; padding: 10px 11px; border: 1px solid #d6e2d5; border-radius: 9px; display: flex; align-items: center; justify-content: space-between; gap: 9px; color: #4d6a57; background: #f4f8f3; cursor: pointer; }
+.mass-status-after-send span { display: grid; gap: 3px; }
+.mass-status-after-send strong { font-size: 9px; }
+.mass-status-after-send small { color: #718076; font-size: 8px; line-height: 1.45; }
+.mass-status-after-send select { max-width: 145px; padding: 6px 22px 6px 7px; border: 1px solid #bfcebd; border-radius: 6px; color: #405949; background: #fff; font: inherit; font-size: 9px; }
 .recipient-search { min-height: 38px; margin-top: 12px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; gap: 8px; color: #7b8581; background: #faf9f8; }
 .recipient-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; font-size: 10px; }
 .mass-recipient-list { min-height: 0; margin: 10px -5px 0 0; padding-right: 5px; flex: 1 1 auto; overflow-y: auto; scrollbar-gutter: stable; }

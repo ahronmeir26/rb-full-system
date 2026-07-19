@@ -486,6 +486,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
   const [recipientSearch, setRecipientSearch] = useState("");
   const [recipientDrafts, setRecipientDrafts] = useState<Record<number, { subject: string; message: string }>>({});
   const [editingRecipientId, setEditingRecipientId] = useState<number | null>(null);
+  const [statusAfterSend, setStatusAfterSend] = useState("");
   const [reviewed, setReviewed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -636,6 +637,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
         subject,
         message,
         recipientDrafts: Object.fromEntries(selectedSchools.filter((school) => recipientDrafts[school.id]).map((school) => [school.id, recipientDrafts[school.id]])),
+        updateStatusTo: statusAfterSend || undefined,
       }),
     });
     const result = await response.json().catch(() => null);
@@ -747,6 +749,7 @@ function MassEmailModal({ schools, statuses, onClose, onSent }: {
               <CheckCircle2 size={15} />
               <div><strong>Personalized automatically</strong><span><code>{"{firstName}"}</code> <code>{"{school}"}</code> <code>{"{code}"}</code> and <code>{"{orderLink}"}</code> are filled for each school.</span></div>
             </div>
+            <label className="mass-status-after-send"><span><strong>After sending, change successful schools to</strong><small>Only schools whose email is accepted for sending will have their status updated.</small></span><select value={statusAfterSend} onChange={(event) => { setReviewed(false); setStatusAfterSend(event.target.value); }}><option value="">Keep current status</option>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
           </section>
 
           <section className="mass-recipient-panel" aria-labelledby="mass-recipient-heading">

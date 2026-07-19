@@ -156,6 +156,9 @@ export async function POST(request: Request) {
     ? body.recipientDrafts as Record<string, unknown>
     : {};
   const recipientEmail = typeof body?.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
+  const updateStatusTo = typeof body?.updateStatusTo === "string" && body.updateStatusTo.trim().length <= 64
+    ? body.updateStatusTo.trim()
+    : null;
   if (!schoolIds.length || schoolIds.length > 1000) {
     return Response.json({ error: "Between 1 and 1,000 schools are required." }, { status: 400 });
   }
@@ -170,6 +173,15 @@ export async function POST(request: Request) {
 
   const supabase = serviceClient();
   if (!supabase) return Response.json({ error: "Correspondence requires a Supabase connection." }, { status: 503 });
+
+  if (updateStatusTo) {
+    const { data: status, error: statusError } = await supabase
+      .from("school_outreach_statuses")
+      .select("name")
+      .eq("name", updateStatusTo)
+      .maybeSingle();
+    if (statusError || !status) return Response.json({ error: "The selected outreach status is unavailable." }, { status: 409 });
+  }
 
   const { data: schools, error: schoolError } = await supabase
     .from("schools")
@@ -263,8 +275,22 @@ export async function POST(request: Request) {
   if (!queued) {
     return Response.json({ error: "Klaviyo could not queue the email.", queued: 0, failed: failedIds.length }, { status: 502 });
   }
+  let statusUpdated = 0;
+  if (updateStatusTo) {
+    const acceptedCorrespondenceIds = new Set(results.filter((result) => result.accepted).map((result) => result.id));
+    const acceptedSchoolIds = rows.filter((row) => acceptedCorrespondenceIds.has(row.correspondence.id)).map((row) => row.correspondence.school_id);
+    const { error: statusUpdateError } = await supabase
+      .from("schools")
+      .update({ outreach_status: updateStatusTo })
+      .in("id", acceptedSchoolIds);
+    if (statusUpdateError) {
+      console.error("Unable to update sent schools after email delivery", statusUpdateError);
+    } else {
+      statusUpdated = acceptedSchoolIds.length;
+    }
+  }
   return Response.json(
-    { queued, failed: failedIds.length, contactedAt },
+    { queued, failed: failedIds.length, statusUpdated, contactedAt },
     { status: failedIds.length ? 207 : 202 },
   );
 }

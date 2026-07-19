@@ -307,8 +307,10 @@ test("mass email targets visible status groups and reviews school recipients", a
   assert.match(editor, /function unavailablePlaceholders/);
   assert.match(editor, /Excluded · missing/);
   assert.match(editor, /Edit this email/);
+  assert.match(editor, /After sending, change successful schools to/);
   assert.match(editor, /schoolIds: selectedSchools\.map/);
   assert.match(correspondenceRoute, /recipientDrafts/);
+  assert.match(correspondenceRoute, /updateStatusTo/);
   assert.match(correspondenceRoute, /fillSchoolTemplate/);
   assert.match(correspondenceRoute, /\.replaceAll\("\{school\}"/);
 });
